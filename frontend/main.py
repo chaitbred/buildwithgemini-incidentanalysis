@@ -30,7 +30,7 @@ logger = logging.getLogger("proxy")
 
 RESOURCE = os.environ.get(
     "AGENT_ENGINE_RESOURCE_NAME",
-    "projects/1014490447575/locations/us-central1/reasoningEngines/7279443725284016128"
+    "projects/1014490447575/locations/us-central1/reasoningEngines/7813683231080841216"
 )
 AGENT_DIRECTORY = os.environ.get("AGENT_DIRECTORY", "app")
 LOCATION = RESOURCE.split("/locations/")[1].split("/")[0]

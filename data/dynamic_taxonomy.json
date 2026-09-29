@@ -23,7 +23,7 @@
       "name": "Infrastructure & Runtime",
       "level": "Domain",
       "parent_id": "root",
-      "incident_count": 5,
+      "incident_count": 9,
       "incident_ids": [
         "INC-1001",
         "INC-1008",
@@ -42,7 +42,7 @@
       "name": "Kubernetes",
       "level": "Technology",
       "parent_id": "root::infrastructure_and_runtime",
-      "incident_count": 5,
+      "incident_count": 9,
       "incident_ids": [
         "INC-1001",
         "INC-1008",
@@ -64,7 +64,7 @@
       "name": "Pod Memory & Cgroups",
       "level": "Component",
       "parent_id": "root::infrastructure_and_runtime::kubernetes",
-      "incident_count": 2,
+      "incident_count": 3,
       "incident_ids": [
         "INC-1001",
         "INC-32DF"
@@ -80,7 +80,7 @@
       "name": "OOMKilled",
       "level": "FailureMode",
       "parent_id": "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups",
-      "incident_count": 2,
+      "incident_count": 3,
       "incident_ids": [
         "INC-1001",
         "INC-32DF"
@@ -94,7 +94,7 @@
       "name": "Database & Storage",
       "level": "Domain",
       "parent_id": "root",
-      "incident_count": 4,
+      "incident_count": 8,
       "incident_ids": [
         "INC-1002",
         "INC-1005",
@@ -114,7 +114,7 @@
       "name": "PostgreSQL",
       "level": "Technology",
       "parent_id": "root::database_and_storage",
-      "incident_count": 2,
+      "incident_count": 4,
       "incident_ids": [
         "INC-1002",
         "INC-1009"
@@ -131,7 +131,7 @@
       "name": "Connection Pool",
       "level": "Component",
       "parent_id": "root::database_and_storage::postgresql",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1002"
       ],
@@ -146,7 +146,7 @@
       "name": "Connection Pool Starvation",
       "level": "FailureMode",
       "parent_id": "root::database_and_storage::postgresql::connection_pool",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1002"
       ],
@@ -159,7 +159,7 @@
       "name": "Messaging & Streaming",
       "level": "Domain",
       "parent_id": "root",
-      "incident_count": 3,
+      "incident_count": 5,
       "incident_ids": [
         "INC-1003",
         "INC-1011",
@@ -177,7 +177,7 @@
       "name": "Apache Kafka",
       "level": "Technology",
       "parent_id": "root::messaging_and_streaming",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1003"
       ],
@@ -192,7 +192,7 @@
       "name": "Consumer Group",
       "level": "Component",
       "parent_id": "root::messaging_and_streaming::apache_kafka",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1003"
       ],
@@ -207,7 +207,7 @@
       "name": "Consumer Group Rebalance Storm",
       "level": "FailureMode",
       "parent_id": "root::messaging_and_streaming::apache_kafka::consumer_group",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1003"
       ],
@@ -220,7 +220,7 @@
       "name": "Networking & Ingress",
       "level": "Domain",
       "parent_id": "root",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1004"
       ],
@@ -235,7 +235,7 @@
       "name": "Envoy Proxy",
       "level": "Technology",
       "parent_id": "root::networking_and_ingress",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1004"
       ],
@@ -250,7 +250,7 @@
       "name": "Upstream Service Mesh",
       "level": "Component",
       "parent_id": "root::networking_and_ingress::envoy_proxy",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1004"
       ],
@@ -265,7 +265,7 @@
       "name": "504 Upstream Gateway Timeout",
       "level": "FailureMode",
       "parent_id": "root::networking_and_ingress::envoy_proxy::upstream_service_mesh",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1004"
       ],
@@ -278,7 +278,7 @@
       "name": "Redis",
       "level": "Technology",
       "parent_id": "root::database_and_storage",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1005"
       ],
@@ -293,7 +293,7 @@
       "name": "In-Memory KeyStore",
       "level": "Component",
       "parent_id": "root::database_and_storage::redis",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1005"
       ],
@@ -308,7 +308,7 @@
       "name": "Single-Thread CPU Block (KEYS command)",
       "level": "FailureMode",
       "parent_id": "root::database_and_storage::redis::in-memory_keystore",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1005"
       ],
@@ -321,7 +321,7 @@
       "name": "Security & Cloud Access",
       "level": "Domain",
       "parent_id": "root",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1006"
       ],
@@ -336,7 +336,7 @@
       "name": "AWS IAM",
       "level": "Technology",
       "parent_id": "root::security_and_cloud_access",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1006"
       ],
@@ -351,7 +351,7 @@
       "name": "Trust Policy / STS",
       "level": "Component",
       "parent_id": "root::security_and_cloud_access::aws_iam",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1006"
       ],
@@ -366,7 +366,7 @@
       "name": "STS AssumeRole AccessDenied",
       "level": "FailureMode",
       "parent_id": "root::security_and_cloud_access::aws_iam::trust_policy_/_sts",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1006"
       ],
@@ -379,7 +379,7 @@
       "name": "Elasticsearch",
       "level": "Technology",
       "parent_id": "root::database_and_storage",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1007"
       ],
@@ -394,7 +394,7 @@
       "name": "Shard Allocation",
       "level": "Component",
       "parent_id": "root::database_and_storage::elasticsearch",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1007"
       ],
@@ -409,7 +409,7 @@
       "name": "Flood-Stage Watermark Disk Block",
       "level": "FailureMode",
       "parent_id": "root::database_and_storage::elasticsearch::shard_allocation",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1007"
       ],
@@ -422,7 +422,7 @@
       "name": "CoreDNS & NodeLocal",
       "level": "Component",
       "parent_id": "root::infrastructure_and_runtime::kubernetes",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1008"
       ],
@@ -437,7 +437,7 @@
       "name": "DNS Lookup Timeout",
       "level": "FailureMode",
       "parent_id": "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1008"
       ],
@@ -450,7 +450,7 @@
       "name": "WAL Replication",
       "level": "Component",
       "parent_id": "root::database_and_storage::postgresql",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1009"
       ],
@@ -465,7 +465,7 @@
       "name": "Replication Lag Saturation",
       "level": "FailureMode",
       "parent_id": "root::database_and_storage::postgresql::wal_replication",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1009"
       ],
@@ -478,7 +478,7 @@
       "name": "Control Plane",
       "level": "Component",
       "parent_id": "root::infrastructure_and_runtime::kubernetes",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1010"
       ],
@@ -493,7 +493,7 @@
       "name": "Pod Eviction / CrashLoop",
       "level": "FailureMode",
       "parent_id": "root::infrastructure_and_runtime::kubernetes::control_plane",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1010"
       ],
@@ -506,7 +506,7 @@
       "name": "RabbitMQ",
       "level": "Technology",
       "parent_id": "root::messaging_and_streaming",
-      "incident_count": 2,
+      "incident_count": 3,
       "incident_ids": [
         "INC-1011",
         "INC-9BCA"
@@ -522,7 +522,7 @@
       "name": "Memory Management & DLQ",
       "level": "Component",
       "parent_id": "root::messaging_and_streaming::rabbitmq",
-      "incident_count": 2,
+      "incident_count": 3,
       "incident_ids": [
         "INC-1011",
         "INC-9BCA"
@@ -538,7 +538,7 @@
       "name": "Memory Alarm Publisher Block",
       "level": "FailureMode",
       "parent_id": "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq",
-      "incident_count": 2,
+      "incident_count": 3,
       "incident_ids": [
         "INC-1011",
         "INC-9BCA"
@@ -552,7 +552,7 @@
       "name": "Kubelet & Container Storage",
       "level": "Component",
       "parent_id": "root::infrastructure_and_runtime::kubernetes",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1012"
       ],
@@ -567,7 +567,7 @@
       "name": "Node DiskPressure",
       "level": "FailureMode",
       "parent_id": "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage",
-      "incident_count": 1,
+      "incident_count": 2,
       "incident_ids": [
         "INC-1012"
       ],
