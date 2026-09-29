@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incident Analyst &amp; Taxonomy Miner</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --accent: #e11d48;
+    --accent-dark: #be123c;
+    --accent-light: #fda4af;
+    --bg: #090d16;
+    --panel-bg: #111827;
+    --card-bg: #1e293b;
+    --border: #334155;
+    --border-light: #475569;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --code-bg: #0b1120;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  
+  /* Header Bar */
+  header {
+    background: linear-gradient(135deg, #be123c 0%, #312e81 100%);
+    color: #fff;
+    padding: 0.85rem 1.6rem;
+    font-weight: 700;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .header-icon { font-size: 1.5rem; }
+  .subtitle { font-size: 0.8rem; font-weight: 400; color: #e2e8f0; opacity: 0.9; }
+
+  /* Navigation Bar Tabs */
+  .nav-tabs {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .tab-btn {
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+  }
+  .tab-btn:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.08);
+  }
+  .tab-btn.active {
+    color: #fff;
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.25);
+    font-weight: 600;
+  }
+
+  .status-badge {
+    font-size: 0.75rem;
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+  }
+  .status-pulse {
+    width: 7px;
+    height: 7px;
+    background: #34d399;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #34d399;
+  }
+
+  /* Main Viewport Content */
+  #main-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .tab-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+  }
+  .tab-view.active-view {
+    display: flex;
+  }
+
+  /* Chat Console Styles */
+  #chat-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+  }
+  #log {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .msg-row {
+    display: flex;
+    gap: 0.8rem;
+    width: 100%;
+    align-items: flex-start;
+  }
+  .msg-row.user { justify-content: flex-end; }
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .avatar.bot {
+    background: linear-gradient(135deg, #be123c 0%, #4338ca 100%);
+    box-shadow: 0 2px 8px rgba(190, 18, 60, 0.4);
+  }
+  .avatar.user { background: #334155; }
+
+  .bubble {
+    display: inline-block;
+    padding: 0.9rem 1.2rem;
+    border-radius: 14px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    text-align: left;
+    max-width: 82%;
+    white-space: pre-wrap;
+    line-height: 1.55;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    font-size: 0.95rem;
+  }
+  .msg-row.user .bubble {
+    background: linear-gradient(135deg, #e11d48 0%, #9f1239 100%);
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+  }
+  .bubble.rich {
+    background: transparent;
+    border: none;
+    padding: 0;
+    max-width: 100%;
+    white-space: normal;
+    box-shadow: none;
+  }
+
+  /* Quick Prompts Bar */
+  #prompts-bar {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0.5rem 1rem 0.3rem 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+  }
+  .prompt-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.55rem 0.8rem;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .prompt-card:hover {
+    background: rgba(51, 65, 85, 0.9);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.15);
+  }
+  .prompt-tag {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent-light);
+  }
+  .prompt-text {
+    font-size: 0.82rem;
+    color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Chat Form */
+  #form-container {
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border);
+    padding: 0.8rem 1rem 1.1rem 1rem;
+  }
+  form {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    gap: 0.6rem;
+  }
+  input, textarea, select {
+    flex: 1;
+    padding: 0.85rem 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.95rem;
+    background: #090d16;
+    color: #f8fafc;
+    outline: none;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.2);
+  }
+  button.primary-btn {
+    padding: 0.85rem 1.6rem;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    box-shadow: 0 3px 10px rgba(225, 29, 72, 0.3);
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  button.primary-btn:hover { opacity: 0.92; }
+
+  /* Page Layouts & Panels */
+  .view-container {
+    max-width: 960px;
+    width: 100%;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+  }
+  .content-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.6rem;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    margin-bottom: 1.5rem;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2rem 1rem;
+    text-align: center;
+    background: #090d16;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+  }
+  .dropzone:hover {
+    border-color: var(--accent);
+    background: #111827;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .result-panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    margin-top: 1.2rem;
+    display: none;
+  }
+
+  /* A2UI Component Cards */
+  .a2card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem;
+    background: var(--card-bg);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    max-width: 100%;
+    color: var(--text);
+  }
+  .a2col { display: flex; flex-direction: column; gap: 0.5rem; }
+  .a2row { display: flex; flex-direction: row; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+  .a2text.a2-h1 { font-size: 1.4rem; font-weight: 700; color: #fda4af; }
+  .a2text.a2-h2 { font-size: 1.2rem; font-weight: 700; color: #f43f5e; }
+  .a2text.a2-h3 { font-size: 1.05rem; font-weight: 600; }
+  .a2text.a2-caption { font-size: 0.85rem; color: #94a3b8; }
+  .a2divider { border: none; border-top: 1px solid var(--border); margin: 0.6rem 0; width: 100%; }
+  .a2img { max-width: 100%; border-radius: 8px; display: block; }
+  .material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-size: 1.25rem; line-height: 1; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="header-icon">🛡️</span>
+    <div>
+      <div style="font-weight: 700; line-height: 1.2;">Incident Analyst</div>
+      <div class="subtitle">Autonomous Multi-Tech Classifier &amp; Dynamic Taxonomy</div>
+    </div>
+  </div>
+
+  <!-- Integrated Top Navigation Bar -->
+  <nav class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat Console</button>
+    <button class="tab-btn" onclick="switchTab('excel')">📊 Upload Excel / Incidents</button>
+    <button class="tab-btn" onclick="switchTab('ontology')">🌳 Custom Ontology</button>
+    <button class="tab-btn" onclick="switchTab('taxonomy')">🌿 Taxonomy Tree</button>
+    <button class="tab-btn" onclick="switchTab('runbooks')">📖 Runbooks</button>
+    <button class="tab-btn" onclick="switchTab('postmortem')">📑 Post-Mortem</button>
+  </nav>
+
+  <div class="status-badge">
+    <div class="status-pulse"></div>
+    <span>Vertex AI Connected</span>
+  </div>
+</header>
+
+<div id="main-container">
+
+  <!-- TAB 1: Chat Console -->
+  <div id="view-chat" class="tab-view active-view">
+    <div id="chat-wrapper">
+      <div id="log">
+        <div class="msg-row bot">
+          <div class="avatar bot">🛡️</div>
+          <div class="bubble">Hello! I am your <strong>Incident Analyst &amp; Taxonomy Miner</strong>.
+You can triage outages directly in this chat, or use the top tabs to <strong>Upload Excel Files</strong> with bulk incidents, define <strong>Custom Ontologies</strong>, and inspect the <strong>Living Taxonomy Tree</strong>.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="prompts-bar">
+      <div class="prompt-card" onclick="sendPrompt('Classify incident: Kafka cluster experiencing consumer group rebalance storm with lag spiking over 500k messages.')">
+        <div class="prompt-tag">⚡ Triage &amp; Evolve</div>
+        <div class="prompt-text">Kafka rebalance storm &amp; lag</div>
+      </div>
+      <div class="prompt-card" onclick="sendPrompt('Search remediation runbooks for Kubernetes OOMKilled failures.')">
+        <div class="prompt-tag">📖 SRE Runbook</div>
+        <div class="prompt-text">K8s OOMKilled diagnostics</div>
+      </div>
+      <div class="prompt-card" onclick="sendPrompt('Generate a post-mortem RCA report for incident INC-1001.')">
+        <div class="prompt-tag">📑 Post-Mortem</div>
+        <div class="prompt-text">Generate RCA for INC-1001</div>
+      </div>
+    </div>
+
+    <div id="form-container">
+      <form id="form">
+        <input id="input" placeholder="Paste an incident description, ask for runbooks, or triage..." autocomplete="off" autofocus>
+        <button class="primary-btn">
+          <span>Send</span>
+          <span class="material-symbols-outlined" style="font-size:1.1rem; color:#fff;">send</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TAB 2: Upload Excel Incidents of Any Volume -->
+  <div id="view-excel" class="tab-view">
+    <div class="view-container">
+      <div class="content-card">
+        <h2 style="margin-top:0; color:#fff; display:flex; align-items:center; gap:0.5rem;">
+          <span>📊</span> Upload Incidents (Excel / CSV of Any Volume)
+        </h2>
+        <p style="color:var(--text-muted); font-size:0.95rem;">
+          Upload workbooks (<code>.xlsx</code>, <code>.xls</code>) or <code>.csv</code> files containing hundreds or thousands of historical incidents. The pipeline processes them in memory-efficient streams, classifies root causes, and clusters them into the taxonomy.
+        </p>
+
+        <div class="dropzone" onclick="document.getElementById('excel-file-input').click()">
+          <span style="font-size:2.4rem;">📁</span>
+          <div style="font-size:1.05rem; font-weight:600; margin-top:0.5rem; color:#f8fafc;" id="excel-label">Click or Drag &amp; Drop Excel / CSV Incident File</div>
+          <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.3rem;">Streaming parser handles files of any volume without memory exhaustion</div>
+        </div>
+        <input type="file" id="excel-file-input" style="display:none;" accept=".xlsx,.xls,.csv" onchange="onExcelFileChosen(event)">
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <button type="button" onclick="createSampleExcel()" style="padding:0.6rem 1.2rem; background:#1e293b; border:1px solid var(--border); border-radius:10px; color:#fff; cursor:pointer;">
+            Generate &amp; Test Demo File
+          </button>
+          <button class="primary-btn" onclick="uploadExcelFile()" id="btn-upload-excel">
+            <span>Process &amp; Ingest Incidents</span>
+          </button>
+        </div>
+
+        <div class="result-panel" id="excel-result-box">
+          <h3 style="margin-top:0; color:var(--accent-light);">Batch Ingestion &amp; Classification Result</h3>
+          <pre id="excel-output"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: Upload Custom Ontology -->
+  <div id="view-ontology" class="tab-view">
+    <div class="view-container">
+      <div class="content-card">
+        <h2 style="margin-top:0; color:#fff; display:flex; align-items:center; gap:0.5rem;">
+          <span>🌳</span> Custom Ontology &amp; Domain Hierarchy Upload
+        </h2>
+        <p style="color:var(--text-muted); font-size:0.95rem;">
+          Import bespoke organizational hierarchies or technology trees to guide the agent's incident categorization and Firestore clustering.
+        </p>
+
+        <div class="grid-2">
+          <div>
+            <div class="dropzone" onclick="document.getElementById('ontology-file-input').click()">
+              <span style="font-size:2.2rem;">📥</span>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.4rem;" id="ontology-label">Choose Ontology File (.json)</div>
+            </div>
+            <input type="file" id="ontology-file-input" style="display:none;" accept=".json" onchange="onOntologyFileChosen(event)">
+            
+            <button type="button" onclick="loadSampleOntology()" style="padding:0.6rem 1rem; background:#1e293b; border:1px solid var(--border); border-radius:10px; color:#fff; cursor:pointer; width:100%;">
+              Load FinTech/Cloud Sample Hierarchy
+            </button>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.4rem;">Or Paste Hierarchy JSON</label>
+            <textarea id="ontology-text" rows="8" placeholder='{
+  "name": "E-Commerce Reliability",
+  "children": [
+    {
+      "name": "Checkout Flow",
+      "children": [
+        {"name": "Payment Gateway Timeout"},
+        {"name": "Cart Lock Contention"}
+      ]
+    }
+  ]
+}'></textarea>
+          </div>
+        </div>
+
+        <div style="margin-top:1.2rem; display:flex; justify-content:flex-end;">
+          <button class="primary-btn" onclick="uploadOntology()" id="btn-upload-ont">
+            <span>Import &amp; Expand Ontology</span>
+          </button>
+        </div>
+
+        <div class="result-panel" id="ont-result-box">
+          <h3 style="margin-top:0; color:var(--accent-light);">Ontology Ingestion Result</h3>
+          <pre id="ont-output"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: Active Taxonomy Tree Viewer -->
+  <div id="view-taxonomy" class="tab-view">
+    <div class="view-container">
+      <div class="content-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <div>
+            <h2 style="margin:0; color:#fff; display:flex; align-items:center; gap:0.5rem;">
+              <span>🌿</span> Active Hierarchical Incident Taxonomy
+            </h2>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.3rem;">4-tier taxonomy mined from past incidents and stored in Firestore native database</div>
+          </div>
+          <button class="primary-btn" onclick="fetchTaxonomyTree()" id="btn-refresh-tree">
+            <span>Refresh Tree</span>
+          </button>
+        </div>
+
+        <div style="background:#090d16; border:1px solid var(--border); border-radius:12px; padding:1.2rem; min-height:350px;">
+          <pre id="tree-content" style="max-height:550px; overflow-y:auto;">Loading active taxonomy tree from Firestore...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: SRE Runbooks -->
+  <div id="view-runbooks" class="tab-view">
+    <div class="view-container">
+      <div class="content-card">
+        <h2 style="margin-top:0; color:#fff;"><span>📖</span> Actionable Remediation Runbooks</h2>
+        <p style="color:var(--text-muted); font-size:0.95rem;">Query step-by-step diagnostic commands and mitigation actions for infrastructure components.</p>
+
+        <div class="grid-2" style="margin-bottom:1rem;">
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.3rem;">Technology</label>
+            <select id="rb-tech">
+              <option value="Kubernetes">Kubernetes</option>
+              <option value="PostgreSQL">PostgreSQL</option>
+              <option value="Kafka">Kafka</option>
+              <option value="Redis">Redis</option>
+              <option value="Envoy">Envoy</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.3rem;">Failure Mechanism</label>
+            <input id="rb-failure" placeholder="e.g. OOMKilled, Lock Contention, Lag">
+          </div>
+        </div>
+
+        <button class="primary-btn" onclick="searchRunbooks()">Search Diagnostic Runbooks</button>
+
+        <div class="result-panel" id="rb-result-box">
+          <h3 style="margin-top:0; color:var(--accent-light);">Diagnostic Procedures</h3>
+          <pre id="rb-output"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 6: RCA Post-Mortem -->
+  <div id="view-postmortem" class="tab-view">
+    <div class="view-container">
+      <div class="content-card">
+        <h2 style="margin-top:0; color:#fff;"><span>📑</span> Root Cause Analysis (RCA) Generator</h2>
+        <p style="color:var(--text-muted); font-size:0.95rem;">Synthesize a formal post-mortem report from Firestore incident records.</p>
+
+        <div style="display:flex; gap:0.8rem; margin-bottom:1rem;">
+          <input id="pm-id" value="INC-1001" placeholder="Enter Incident ID (e.g. INC-1001, INC-1002)" style="max-width:300px;">
+          <button class="primary-btn" onclick="generatePostMortem()">Generate Post-Mortem Report</button>
+        </div>
+
+        <div class="result-panel" id="pm-result-box">
+          <h3 style="margin-top:0; color:var(--accent-light);">Generated RCA Report</h3>
+          <pre id="pm-output"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Tab Switching
+function switchTab(tabName) {
+  document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+  document.querySelectorAll(".tab-view").forEach(v => v.classList.remove("active-view"));
+
+  const targetView = document.getElementById("view-" + tabName);
+  if (targetView) targetView.classList.add("active-view");
+
+  const clickedBtn = Array.from(document.querySelectorAll(".tab-btn")).find(b => b.getAttribute("onclick").includes(tabName));
+  if (clickedBtn) clickedBtn.classList.add("active");
+
+  if (tabName === "taxonomy") {
+    fetchTaxonomyTree();
+  }
+}
+
+// Chat Engine
+const log = document.getElementById("log");
+const chatWrapper = document.getElementById("chat-wrapper");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function bubble(who) {
+  const row = el("div", "msg-row " + who);
+  const avatar = el("div", "avatar " + who, who === "user" ? "👤" : "🛡️");
+  const b = el("div", "bubble");
+  
+  if (who === "bot") {
+    row.appendChild(avatar);
+    row.appendChild(b);
+  } else {
+    row.appendChild(b);
+    row.appendChild(avatar);
+  }
+  
+  log.appendChild(row);
+  chatWrapper.scrollTop = chatWrapper.scrollHeight;
+  return b;
+}
+
+function sendPrompt(text) {
+  switchTab("chat");
+  input.value = text;
+  form.dispatchEvent(new Event("submit"));
+}
+
+/* ----------------------------------------------------------------------------
+ * A2UI mini-renderer (v0.8 Basic Catalog subset).
+ * -------------------------------------------------------------------------- */
+function boundStr(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v.literalString === "string") return v.literalString;
+  return "";
+}
+
+function childIds(props) {
+  const ids = [];
+  if (props && typeof props.child === "string") ids.push(props.child);
+  const ch = props && props.children;
+  if (ch && Array.isArray(ch.explicitList)) for (const c of ch.explicitList) if (typeof c === "string") ids.push(c);
+  return ids;
+}
+
+function iconName(n) { return String(n || "").replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/\s+/g, "_").toLowerCase(); }
+
+function buildElement(id, comps) {
+  const c = comps[id];
+  if (!c) return null;
+  const t = c.component ? Object.keys(c.component)[0] : null;
+  const p = t ? c.component[t] : null;
+  if (!p) return null;
+
+  switch (t) {
+    case "Card": {
+      const d = el("div", "a2card");
+      childIds(p).forEach(k => { const ch = buildElement(k, comps); if (ch) d.appendChild(ch); });
+      return d;
+    }
+    case "Column": {
+      const d = el("div", "a2col");
+      childIds(p).forEach(k => { const ch = buildElement(k, comps); if (ch) d.appendChild(ch); });
+      return d;
+    }
+    case "Row": {
+      const d = el("div", "a2row" + (p.distribution === "spaceBetween" ? " between" : ""));
+      childIds(p).forEach(k => { const ch = buildElement(k, comps); if (ch) d.appendChild(ch); });
+      return d;
+    }
+    case "Text": {
+      const hint = p.usageHint || "body";
+      const tag = hint === "h1" ? "h1" : hint === "h2" ? "h2" : hint === "h3" ? "h3" : hint === "h4" ? "h4" : "p";
+      const cls = "a2text a2-" + hint;
+      return el(tag, cls, boundStr(p.text));
+    }
+    case "Divider": return el("hr", "a2divider");
+    case "Icon": {
+      const span = el("span", "material-symbols-outlined", iconName(boundStr(p.name)));
+      return span;
+    }
+    case "Image": {
+      const url = boundStr(p.url);
+      if (/^https?:\/\//i.test(url)) {
+        const img = el("img", "a2img");
+        img.src = url;
+        img.alt = boundStr(p.altText) || "";
+        return img;
+      }
+      return null;
+    }
+    default: return null;
+  }
+}
+
+function renderA2UI(msg, container) {
+  const surf = msg.surfaceUpdate || msg.beginRendering;
+  if (!surf) return false;
+  const comps = {};
+  for (const c of surf.components || []) comps[c.id] = c;
+  const root = buildElement(surf.root, comps);
+  if (!root) return false;
+  container.classList.add("rich");
+  container.appendChild(root);
+  return true;
+}
+
+function renderReply(parts) {
+  const b = bubble("bot");
+  let anyRendered = false;
+  for (const p of parts || []) {
+    if (p.kind === "text" && p.text) {
+      const pEl = el("p", "", p.text);
+      pEl.style.margin = "0 0 0.5rem 0";
+      b.appendChild(pEl);
+      anyRendered = true;
+    } else if (p.kind === "a2ui" && p.data) {
+      if (renderA2UI(p.data, b)) anyRendered = true;
+    }
+  }
+  if (!anyRendered) b.textContent = "(The agent didn't return a reply.)";
+  chatWrapper.scrollTop = chatWrapper.scrollHeight;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  
+  bubble("user").textContent = text;
+  const waiting = bubble("bot");
+  waiting.textContent = "Analyzing incident & querying tools...";
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    if (!res.ok) {
+      waiting.textContent = "Error: " + res.status + " " + res.statusText;
+      return;
+    }
+    const data = await res.json();
+    waiting.parentElement.remove();
+    renderReply(data.parts);
+  } catch (err) {
+    waiting.textContent = "Failed to send: " + err;
+  }
+});
+
+/* ----------------------------------------------------------------------------
+ * Excel Incident Ingestion Handlers
+ * -------------------------------------------------------------------------- */
+let selectedExcelFile = null;
+function onExcelFileChosen(e) {
+  selectedExcelFile = e.target.files[0];
+  if (selectedExcelFile) {
+    document.getElementById("excel-label").textContent = "Selected: " + selectedExcelFile.name + " (" + Math.round(selectedExcelFile.size/1024) + " KB)";
+  }
+}
+
+async function uploadExcelFile() {
+  if (!selectedExcelFile) {
+    alert("Please select an Excel (.xlsx, .xls) or CSV file first.");
+    return;
+  }
+  const btn = document.getElementById("btn-upload-excel");
+  const box = document.getElementById("excel-result-box");
+  const out = document.getElementById("excel-output");
+
+  btn.disabled = true;
+  btn.textContent = "Processing Stream...";
+  box.style.display = "block";
+  out.textContent = "Uploading workbook to streaming processor...";
+
+  const formData = new FormData();
+  formData.append("file", selectedExcelFile);
+
+  try {
+    const res = await fetch("/api/upload-excel", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      let agentReply = "";
+      (data.agent_response || []).forEach(p => { if (p.kind === "text") agentReply += p.text + "\n"; });
+      out.textContent = `✅ Successfully parsed ${data.total_rows_parsed} records from ${data.filename}!\n\nSample Records:\n${JSON.stringify(data.sample_records, null, 2)}\n\nAgent Classifier Analysis:\n${agentReply}`;
+    } else {
+      out.textContent = "Upload failed: " + data.message;
+    }
+  } catch (err) {
+    out.textContent = "Error: " + err;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Process & Ingest Incidents";
+  }
+}
+
+function createSampleExcel() {
+  // Create a synthetic CSV file blob for quick demo testing
+  const csvContent = "incident_id,title,description,severity\n" +
+    "EX-101,Gateway Timeout,Envoy proxy timed out forwarding to payments service upstream,SEV-1\n" +
+    "EX-102,Deadlock detected,PostgreSQL transaction deadlock on orders table during concurrent checkout,SEV-2\n" +
+    "EX-103,Kafka lag spike,Consumer group billing-processor lag exceeded 250000 records,SEV-2\n";
+  const blob = new Blob([csvContent], { type: "text/csv" });
+  selectedExcelFile = new File([blob], "sample_incidents.csv", { type: "text/csv" });
+  document.getElementById("excel-label").textContent = "Selected Demo: sample_incidents.csv (3 rows)";
+  uploadExcelFile();
+}
+
+/* ----------------------------------------------------------------------------
+ * Custom Ontology Handlers
+ * -------------------------------------------------------------------------- */
+let selectedOntologyFile = null;
+function onOntologyFileChosen(e) {
+  selectedOntologyFile = e.target.files[0];
+  if (selectedOntologyFile) {
+    document.getElementById("ontology-label").textContent = "File: " + selectedOntologyFile.name;
+    const reader = new FileReader();
+    reader.onload = (evt) => { document.getElementById("ontology-text").value = evt.target.result; };
+    reader.readAsText(selectedOntologyFile);
+  }
+}
+
+function loadSampleOntology() {
+  const sample = {
+    "name": "Cloud Native Reliability",
+    "children": [
+      {
+        "name": "Service Mesh & Gateway",
+        "children": [
+          {"name": "mTLS Handshake Degradation"},
+          {"name": "Circuit Breaker Tripped"}
+        ]
+      },
+      {
+        "name": "Distributed Messaging",
+        "children": [
+          {"name": "Kafka Rebalance Storm"},
+          {"name": "Dead Letter Queue Saturation"}
+        ]
+      }
+    ]
+  };
+  document.getElementById("ontology-text").value = JSON.stringify(sample, null, 2);
+}
+
+async function uploadOntology() {
+  const text = document.getElementById("ontology-text").value.trim();
+  if (!text) { alert("Please provide or paste ontology JSON."); return; }
+  const btn = document.getElementById("btn-upload-ont");
+  const box = document.getElementById("ont-result-box");
+  const out = document.getElementById("ont-output");
+
+  btn.disabled = true;
+  btn.textContent = "Importing...";
+  box.style.display = "block";
+  out.textContent = "Merging ontology into taxonomy tree and persisting to Firestore...";
+
+  const formData = new FormData();
+  formData.append("json_data", text);
+
+  try {
+    const res = await fetch("/api/upload-ontology", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.agent_response || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    out.textContent = (data.status === "success" ? "✅ Success: " : "❌ Error: ") + (reply || data.message);
+  } catch (err) {
+    out.textContent = "Error: " + err;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Import & Expand Ontology";
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Active Taxonomy Tree Viewer
+ * -------------------------------------------------------------------------- */
+async function fetchTaxonomyTree() {
+  const treeEl = document.getElementById("tree-content");
+  treeEl.textContent = "Fetching active taxonomy tree from Firestore...";
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Show the current dynamic taxonomy tree using view_taxonomy_tree" })
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.parts || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    treeEl.textContent = reply || "No tree data returned.";
+  } catch(err) {
+    treeEl.textContent = "Error: " + err;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Runbooks & Post-Mortem Tabs
+ * -------------------------------------------------------------------------- */
+async function searchRunbooks() {
+  const tech = document.getElementById("rb-tech").value;
+  const failure = document.getElementById("rb-failure").value.trim();
+  const box = document.getElementById("rb-result-box");
+  const out = document.getElementById("rb-output");
+
+  box.style.display = "block";
+  out.textContent = "Fetching diagnostic procedures from agent...";
+
+  let prompt = `Search remediation runbooks for technology '${tech}'`;
+  if (failure) prompt += ` and failure mechanism '${failure}'`;
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: prompt })
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.parts || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    out.textContent = reply || "No runbook entry found.";
+  } catch(e) {
+    out.textContent = "Error: " + e;
+  }
+}
+
+async function generatePostMortem() {
+  const id = document.getElementById("pm-id").value.trim();
+  if (!id) return;
+  const box = document.getElementById("pm-result-box");
+  const out = document.getElementById("pm-output");
+
+  box.style.display = "block";
+  out.textContent = "Agent is reading incident data and assembling markdown post-mortem...";
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: `Generate a formal post-mortem RCA report for incident ID '${id}'` })
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.parts || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    out.textContent = reply || "Could not generate report.";
+  } catch(e) {
+    out.textContent = "Error: " + e;
+  }
+}
+</script>
+</body>
+</html>

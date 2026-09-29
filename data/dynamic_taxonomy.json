@@ -1,0 +1,579 @@
+{
+  "root_id": "root",
+  "nodes": {
+    "root": {
+      "node_id": "root",
+      "name": "Incident Taxonomy",
+      "level": "Root",
+      "parent_id": null,
+      "incident_count": 0,
+      "incident_ids": [],
+      "children": [
+        "root::infrastructure_and_runtime",
+        "root::database_and_storage",
+        "root::messaging_and_streaming",
+        "root::networking_and_ingress",
+        "root::security_and_cloud_access"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime": {
+      "node_id": "root::infrastructure_and_runtime",
+      "name": "Infrastructure & Runtime",
+      "level": "Domain",
+      "parent_id": "root",
+      "incident_count": 5,
+      "incident_ids": [
+        "INC-1001",
+        "INC-1008",
+        "INC-1010",
+        "INC-1012",
+        "INC-32DF"
+      ],
+      "children": [
+        "root::infrastructure_and_runtime::kubernetes"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes",
+      "name": "Kubernetes",
+      "level": "Technology",
+      "parent_id": "root::infrastructure_and_runtime",
+      "incident_count": 5,
+      "incident_ids": [
+        "INC-1001",
+        "INC-1008",
+        "INC-1010",
+        "INC-1012",
+        "INC-32DF"
+      ],
+      "children": [
+        "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups",
+        "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal",
+        "root::infrastructure_and_runtime::kubernetes::control_plane",
+        "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups",
+      "name": "Pod Memory & Cgroups",
+      "level": "Component",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes",
+      "incident_count": 2,
+      "incident_ids": [
+        "INC-1001",
+        "INC-32DF"
+      ],
+      "children": [
+        "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups::oomkilled"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups::oomkilled": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups::oomkilled",
+      "name": "OOMKilled",
+      "level": "FailureMode",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes::pod_memory_and_cgroups",
+      "incident_count": 2,
+      "incident_ids": [
+        "INC-1001",
+        "INC-32DF"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage": {
+      "node_id": "root::database_and_storage",
+      "name": "Database & Storage",
+      "level": "Domain",
+      "parent_id": "root",
+      "incident_count": 4,
+      "incident_ids": [
+        "INC-1002",
+        "INC-1005",
+        "INC-1007",
+        "INC-1009"
+      ],
+      "children": [
+        "root::database_and_storage::postgresql",
+        "root::database_and_storage::redis",
+        "root::database_and_storage::elasticsearch"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::postgresql": {
+      "node_id": "root::database_and_storage::postgresql",
+      "name": "PostgreSQL",
+      "level": "Technology",
+      "parent_id": "root::database_and_storage",
+      "incident_count": 2,
+      "incident_ids": [
+        "INC-1002",
+        "INC-1009"
+      ],
+      "children": [
+        "root::database_and_storage::postgresql::connection_pool",
+        "root::database_and_storage::postgresql::wal_replication"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::postgresql::connection_pool": {
+      "node_id": "root::database_and_storage::postgresql::connection_pool",
+      "name": "Connection Pool",
+      "level": "Component",
+      "parent_id": "root::database_and_storage::postgresql",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1002"
+      ],
+      "children": [
+        "root::database_and_storage::postgresql::connection_pool::connection_pool_starvation"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::postgresql::connection_pool::connection_pool_starvation": {
+      "node_id": "root::database_and_storage::postgresql::connection_pool::connection_pool_starvation",
+      "name": "Connection Pool Starvation",
+      "level": "FailureMode",
+      "parent_id": "root::database_and_storage::postgresql::connection_pool",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1002"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming": {
+      "node_id": "root::messaging_and_streaming",
+      "name": "Messaging & Streaming",
+      "level": "Domain",
+      "parent_id": "root",
+      "incident_count": 3,
+      "incident_ids": [
+        "INC-1003",
+        "INC-1011",
+        "INC-9BCA"
+      ],
+      "children": [
+        "root::messaging_and_streaming::apache_kafka",
+        "root::messaging_and_streaming::rabbitmq"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming::apache_kafka": {
+      "node_id": "root::messaging_and_streaming::apache_kafka",
+      "name": "Apache Kafka",
+      "level": "Technology",
+      "parent_id": "root::messaging_and_streaming",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1003"
+      ],
+      "children": [
+        "root::messaging_and_streaming::apache_kafka::consumer_group"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming::apache_kafka::consumer_group": {
+      "node_id": "root::messaging_and_streaming::apache_kafka::consumer_group",
+      "name": "Consumer Group",
+      "level": "Component",
+      "parent_id": "root::messaging_and_streaming::apache_kafka",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1003"
+      ],
+      "children": [
+        "root::messaging_and_streaming::apache_kafka::consumer_group::consumer_group_rebalance_storm"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming::apache_kafka::consumer_group::consumer_group_rebalance_storm": {
+      "node_id": "root::messaging_and_streaming::apache_kafka::consumer_group::consumer_group_rebalance_storm",
+      "name": "Consumer Group Rebalance Storm",
+      "level": "FailureMode",
+      "parent_id": "root::messaging_and_streaming::apache_kafka::consumer_group",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1003"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::networking_and_ingress": {
+      "node_id": "root::networking_and_ingress",
+      "name": "Networking & Ingress",
+      "level": "Domain",
+      "parent_id": "root",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1004"
+      ],
+      "children": [
+        "root::networking_and_ingress::envoy_proxy"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::networking_and_ingress::envoy_proxy": {
+      "node_id": "root::networking_and_ingress::envoy_proxy",
+      "name": "Envoy Proxy",
+      "level": "Technology",
+      "parent_id": "root::networking_and_ingress",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1004"
+      ],
+      "children": [
+        "root::networking_and_ingress::envoy_proxy::upstream_service_mesh"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::networking_and_ingress::envoy_proxy::upstream_service_mesh": {
+      "node_id": "root::networking_and_ingress::envoy_proxy::upstream_service_mesh",
+      "name": "Upstream Service Mesh",
+      "level": "Component",
+      "parent_id": "root::networking_and_ingress::envoy_proxy",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1004"
+      ],
+      "children": [
+        "root::networking_and_ingress::envoy_proxy::upstream_service_mesh::504_upstream_gateway_timeout"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::networking_and_ingress::envoy_proxy::upstream_service_mesh::504_upstream_gateway_timeout": {
+      "node_id": "root::networking_and_ingress::envoy_proxy::upstream_service_mesh::504_upstream_gateway_timeout",
+      "name": "504 Upstream Gateway Timeout",
+      "level": "FailureMode",
+      "parent_id": "root::networking_and_ingress::envoy_proxy::upstream_service_mesh",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1004"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::redis": {
+      "node_id": "root::database_and_storage::redis",
+      "name": "Redis",
+      "level": "Technology",
+      "parent_id": "root::database_and_storage",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1005"
+      ],
+      "children": [
+        "root::database_and_storage::redis::in-memory_keystore"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::redis::in-memory_keystore": {
+      "node_id": "root::database_and_storage::redis::in-memory_keystore",
+      "name": "In-Memory KeyStore",
+      "level": "Component",
+      "parent_id": "root::database_and_storage::redis",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1005"
+      ],
+      "children": [
+        "root::database_and_storage::redis::in-memory_keystore::single-thread_cpu_block_(keys_command)"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::redis::in-memory_keystore::single-thread_cpu_block_(keys_command)": {
+      "node_id": "root::database_and_storage::redis::in-memory_keystore::single-thread_cpu_block_(keys_command)",
+      "name": "Single-Thread CPU Block (KEYS command)",
+      "level": "FailureMode",
+      "parent_id": "root::database_and_storage::redis::in-memory_keystore",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1005"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::security_and_cloud_access": {
+      "node_id": "root::security_and_cloud_access",
+      "name": "Security & Cloud Access",
+      "level": "Domain",
+      "parent_id": "root",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1006"
+      ],
+      "children": [
+        "root::security_and_cloud_access::aws_iam"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::security_and_cloud_access::aws_iam": {
+      "node_id": "root::security_and_cloud_access::aws_iam",
+      "name": "AWS IAM",
+      "level": "Technology",
+      "parent_id": "root::security_and_cloud_access",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1006"
+      ],
+      "children": [
+        "root::security_and_cloud_access::aws_iam::trust_policy_/_sts"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::security_and_cloud_access::aws_iam::trust_policy_/_sts": {
+      "node_id": "root::security_and_cloud_access::aws_iam::trust_policy_/_sts",
+      "name": "Trust Policy / STS",
+      "level": "Component",
+      "parent_id": "root::security_and_cloud_access::aws_iam",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1006"
+      ],
+      "children": [
+        "root::security_and_cloud_access::aws_iam::trust_policy_/_sts::sts_assumerole_accessdenied"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::security_and_cloud_access::aws_iam::trust_policy_/_sts::sts_assumerole_accessdenied": {
+      "node_id": "root::security_and_cloud_access::aws_iam::trust_policy_/_sts::sts_assumerole_accessdenied",
+      "name": "STS AssumeRole AccessDenied",
+      "level": "FailureMode",
+      "parent_id": "root::security_and_cloud_access::aws_iam::trust_policy_/_sts",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1006"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::elasticsearch": {
+      "node_id": "root::database_and_storage::elasticsearch",
+      "name": "Elasticsearch",
+      "level": "Technology",
+      "parent_id": "root::database_and_storage",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1007"
+      ],
+      "children": [
+        "root::database_and_storage::elasticsearch::shard_allocation"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::elasticsearch::shard_allocation": {
+      "node_id": "root::database_and_storage::elasticsearch::shard_allocation",
+      "name": "Shard Allocation",
+      "level": "Component",
+      "parent_id": "root::database_and_storage::elasticsearch",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1007"
+      ],
+      "children": [
+        "root::database_and_storage::elasticsearch::shard_allocation::flood-stage_watermark_disk_block"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::elasticsearch::shard_allocation::flood-stage_watermark_disk_block": {
+      "node_id": "root::database_and_storage::elasticsearch::shard_allocation::flood-stage_watermark_disk_block",
+      "name": "Flood-Stage Watermark Disk Block",
+      "level": "FailureMode",
+      "parent_id": "root::database_and_storage::elasticsearch::shard_allocation",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1007"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal",
+      "name": "CoreDNS & NodeLocal",
+      "level": "Component",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1008"
+      ],
+      "children": [
+        "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal::dns_lookup_timeout"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal::dns_lookup_timeout": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal::dns_lookup_timeout",
+      "name": "DNS Lookup Timeout",
+      "level": "FailureMode",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes::coredns_and_nodelocal",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1008"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::postgresql::wal_replication": {
+      "node_id": "root::database_and_storage::postgresql::wal_replication",
+      "name": "WAL Replication",
+      "level": "Component",
+      "parent_id": "root::database_and_storage::postgresql",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1009"
+      ],
+      "children": [
+        "root::database_and_storage::postgresql::wal_replication::replication_lag_saturation"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::database_and_storage::postgresql::wal_replication::replication_lag_saturation": {
+      "node_id": "root::database_and_storage::postgresql::wal_replication::replication_lag_saturation",
+      "name": "Replication Lag Saturation",
+      "level": "FailureMode",
+      "parent_id": "root::database_and_storage::postgresql::wal_replication",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1009"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::control_plane": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::control_plane",
+      "name": "Control Plane",
+      "level": "Component",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1010"
+      ],
+      "children": [
+        "root::infrastructure_and_runtime::kubernetes::control_plane::pod_eviction_/_crashloop"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::control_plane::pod_eviction_/_crashloop": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::control_plane::pod_eviction_/_crashloop",
+      "name": "Pod Eviction / CrashLoop",
+      "level": "FailureMode",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes::control_plane",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1010"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming::rabbitmq": {
+      "node_id": "root::messaging_and_streaming::rabbitmq",
+      "name": "RabbitMQ",
+      "level": "Technology",
+      "parent_id": "root::messaging_and_streaming",
+      "incident_count": 2,
+      "incident_ids": [
+        "INC-1011",
+        "INC-9BCA"
+      ],
+      "children": [
+        "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq": {
+      "node_id": "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq",
+      "name": "Memory Management & DLQ",
+      "level": "Component",
+      "parent_id": "root::messaging_and_streaming::rabbitmq",
+      "incident_count": 2,
+      "incident_ids": [
+        "INC-1011",
+        "INC-9BCA"
+      ],
+      "children": [
+        "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq::memory_alarm_publisher_block"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq::memory_alarm_publisher_block": {
+      "node_id": "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq::memory_alarm_publisher_block",
+      "name": "Memory Alarm Publisher Block",
+      "level": "FailureMode",
+      "parent_id": "root::messaging_and_streaming::rabbitmq::memory_management_and_dlq",
+      "incident_count": 2,
+      "incident_ids": [
+        "INC-1011",
+        "INC-9BCA"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage",
+      "name": "Kubelet & Container Storage",
+      "level": "Component",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1012"
+      ],
+      "children": [
+        "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage::node_diskpressure"
+      ],
+      "is_custom": false,
+      "metadata": {}
+    },
+    "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage::node_diskpressure": {
+      "node_id": "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage::node_diskpressure",
+      "name": "Node DiskPressure",
+      "level": "FailureMode",
+      "parent_id": "root::infrastructure_and_runtime::kubernetes::kubelet_and_container_storage",
+      "incident_count": 1,
+      "incident_ids": [
+        "INC-1012"
+      ],
+      "children": [],
+      "is_custom": false,
+      "metadata": {}
+    }
+  }
+}

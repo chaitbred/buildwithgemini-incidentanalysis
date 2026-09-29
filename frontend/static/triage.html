@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Triage &amp; Classify - Incident Analyst</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
+<style>
+  :root {
+    --accent: #e11d48; --accent-dark: #be123c; --accent-light: #fda4af;
+    --bg: #090d16; --panel-bg: #111827; --card-bg: #1e293b; --border: #334155;
+    --text: #f8fafc; --text-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; min-height:100vh; }
+  nav { background:#111827; border-bottom:1px solid var(--border); padding:0.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; }
+  .nav-links { display:flex; gap:1rem; align-items:center; }
+  .nav-links a { color:var(--text-muted); text-decoration:none; font-size:0.9rem; font-weight:500; padding:0.4rem 0.8rem; border-radius:8px; transition:all 0.2s; }
+  .nav-links a:hover, .nav-links a.active { color:#fff; background:var(--card-bg); border:1px solid var(--border); }
+  .nav-links a.active { border-color:var(--accent); color:var(--accent-light); }
+  .container { max-width:900px; width:100%; margin:2rem auto; padding:0 1rem; }
+  .card { background:var(--panel-bg); border:1px solid var(--border); border-radius:14px; padding:1.8rem; box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+  h1 { margin-top:0; font-size:1.5rem; display:flex; align-items:center; gap:0.6rem; color:#fff; }
+  p.subtitle { color:var(--text-muted); font-size:0.95rem; margin-bottom:1.5rem; }
+  label { display:block; font-size:0.85rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.4rem; }
+  textarea, input { width:100%; background:#090d16; border:1px solid var(--border); border-radius:10px; color:#fff; padding:0.8rem; font-size:0.95rem; margin-bottom:1rem; font-family:inherit; }
+  textarea:focus, input:focus { outline:none; border-color:var(--accent); }
+  button { padding:0.8rem 1.6rem; background:linear-gradient(135deg, #e11d48 0%, #be123c 100%); color:#fff; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-size:0.95rem; }
+  button:hover { opacity:0.9; }
+  #result-box { margin-top:1.5rem; display:none; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:1.2rem; }
+  pre { white-space:pre-wrap; word-wrap:break-word; margin:0; font-family:inherit; font-size:0.95rem; line-height:1.5; }
+</style>
+</head>
+<body>
+<nav>
+  <div style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+    <span>🛡️ Incident Analyst</span>
+  </div>
+  <div class="nav-links">
+    <a href="/">💬 Chat Console</a>
+    <a href="/triage.html" class="active">⚡ Triage</a>
+    <a href="/ontology.html">🌳 Ontology</a>
+    <a href="/runbooks.html">📖 Runbooks</a>
+    <a href="/database.html">🗄️ Incidents DB</a>
+    <a href="/postmortem.html">📑 RCA Post-Mortem</a>
+    <a href="/status.html">🌐 Status Checker</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="card">
+    <h1><span>⚡</span> Autonomous Incident Classification &amp; Ontology Mining</h1>
+    <p class="subtitle">Submit a raw outage description to classify technologies, diagnose failure mechanisms, and automatically record into Firestore.</p>
+
+    <label>Incident Description / Outage Log</label>
+    <textarea id="desc" rows="6" placeholder="Example: Payment service pods in prod cluster are crashlooping with OOMKilled (Exit Code 137). PostgreSQL connection pool is saturated with idle connections."></textarea>
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; gap:0.5rem;">
+        <button type="button" onclick="loadSample()" style="background:#1e293b; border:1px solid var(--border);">Load Sample</button>
+      </div>
+      <button onclick="runTriage()" id="btn-triage">Classify &amp; Save Incident</button>
+    </div>
+
+    <div id="result-box">
+      <h3 style="margin-top:0; color:var(--accent-light); font-size:1.1rem;">Analysis Result</h3>
+      <pre id="output"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+function loadSample() {
+  document.getElementById("desc").value = "Kafka cluster partition 3 replication lag is spiking past 1.2M records. Consumer group 'analytics-workers' is thrashing in constant rebalance loops due to heartbeat timeouts.";
+}
+
+async function runTriage() {
+  const text = document.getElementById("desc").value.trim();
+  if (!text) return;
+  const btn = document.getElementById("btn-triage");
+  const box = document.getElementById("result-box");
+  const out = document.getElementById("output");
+
+  btn.disabled = true;
+  btn.textContent = "Analyzing & Mining...";
+  box.style.display = "block";
+  out.textContent = "Invoking deployed agent on Agent Runtime...";
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Classify this incident and save to Firestore: " + text })
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.parts || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    out.textContent = reply || "No textual reply received.";
+  } catch(e) {
+    out.textContent = "Error: " + e;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Classify & Save Incident";
+  }
+}
+</script>
+</body>
+</html>

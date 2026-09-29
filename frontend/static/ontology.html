@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ontology Management - Incident Analyst</title>
+<style>
+  :root {
+    --accent: #e11d48; --accent-dark: #be123c; --accent-light: #fda4af;
+    --bg: #090d16; --panel-bg: #111827; --card-bg: #1e293b; --border: #334155;
+    --text: #f8fafc; --text-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; min-height:100vh; }
+  nav { background:#111827; border-bottom:1px solid var(--border); padding:0.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; }
+  .nav-links { display:flex; gap:0.8rem; align-items:center; }
+  .nav-links a { color:var(--text-muted); text-decoration:none; font-size:0.85rem; font-weight:500; padding:0.35rem 0.75rem; border-radius:8px; transition:all 0.2s; }
+  .nav-links a:hover, .nav-links a.active { color:#fff; background:var(--card-bg); border:1px solid var(--border); }
+  .nav-links a.active { border-color:var(--accent); color:var(--accent-light); }
+  .container { max-width:960px; width:100%; margin:2rem auto; padding:0 1rem; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; }
+  .card { background:var(--panel-bg); border:1px solid var(--border); border-radius:14px; padding:1.8rem; box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+  h1 { margin-top:0; font-size:1.5rem; display:flex; align-items:center; gap:0.6rem; color:#fff; }
+  p.subtitle { color:var(--text-muted); font-size:0.95rem; margin-bottom:1.5rem; }
+  label { display:block; font-size:0.85rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.4rem; }
+  textarea { width:100%; background:#090d16; border:1px solid var(--border); border-radius:10px; color:#fff; padding:0.8rem; font-size:0.9rem; font-family:monospace; margin-bottom:1rem; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  .dropzone { border:2px dashed var(--border); border-radius:10px; padding:1.5rem; text-align:center; background:#090d16; cursor:pointer; margin-bottom:1rem; transition:border-color 0.2s; }
+  .dropzone:hover { border-color:var(--accent); }
+  button { padding:0.8rem 1.6rem; background:linear-gradient(135deg, #e11d48 0%, #be123c 100%); color:#fff; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-size:0.95rem; }
+  button:hover { opacity:0.9; }
+  #result-box { margin-top:1.5rem; display:none; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:1.2rem; }
+  pre { white-space:pre-wrap; word-wrap:break-word; margin:0; font-family:monospace; font-size:0.9rem; line-height:1.5; max-height:450px; overflow-y:auto; }
+</style>
+</head>
+<body>
+<nav>
+  <div style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+    <span>🛡️ Incident Analyst</span>
+  </div>
+  <div class="nav-links">
+    <a href="/">💬 Console</a>
+    <a href="/triage.html">⚡ Triage</a>
+    <a href="/ontology.html" class="active">🌳 Ontology &amp; Upload</a>
+    <a href="/runbooks.html">📖 Runbooks</a>
+    <a href="/database.html">🗄️ Database</a>
+    <a href="/postmortem.html">📑 Post-Mortem</a>
+    <a href="/status.html">🌐 Live Status</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h1><span>🌳</span> Dynamic Incident Ontology &amp; Custom Hierarchy Upload</h1>
+    <p class="subtitle">Upload custom taxonomy trees (JSON / Excel) or define hierarchical categories to guide autonomous incident clustering and Firestore classification.</p>
+  </div>
+
+  <div class="grid">
+    <!-- Upload / Import Panel -->
+    <div class="card">
+      <h2 style="margin-top:0; font-size:1.2rem; color:var(--accent-light);">📥 Upload Custom Ontology</h2>
+      
+      <div class="dropzone" onclick="document.getElementById('file-input').click()">
+        <span style="font-size:2rem;">📁</span>
+        <div style="font-size:0.9rem; margin-top:0.4rem; color:#e2e8f0;">Click to select JSON / Excel file</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">Supports .json ontology schema</div>
+      </div>
+      <input type="file" id="file-input" style="display:none;" accept=".json,.xlsx,.xls,.csv" onchange="handleFileSelect(event)">
+
+      <label>Or Paste Custom Ontology JSON</label>
+      <textarea id="ontology-json" rows="9" placeholder='{
+  "name": "Custom FinTech Services",
+  "children": [
+    {
+      "name": "Payment Gateway",
+      "children": [
+        {"name": "Stripe Webhook Timeout"},
+        {"name": "Idempotency Key Conflict"}
+      ]
+    }
+  ]
+}'></textarea>
+
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" onclick="loadSampleOntology()" style="background:#1e293b; border:1px solid var(--border);">Load Sample</button>
+        <button onclick="submitOntology()" id="btn-upload">Upload &amp; Expand Ontology</button>
+      </div>
+    </div>
+
+    <!-- View Current Ontology Tree -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="margin:0; font-size:1.2rem; color:#fff;">🌳 Current Active Ontology</h2>
+        <button onclick="fetchTaxonomyTree()" id="btn-tree" style="padding:0.4rem 0.8rem; font-size:0.8rem;">Refresh Tree</button>
+      </div>
+      <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0;">The live multi-tier taxonomy mined from past incidents and stored in Firestore:</p>
+      
+      <div style="background:#090d16; border:1px solid var(--border); border-radius:10px; padding:1rem;">
+        <pre id="tree-display">Click "Refresh Tree" to inspect the active hierarchical taxonomy tree.</pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="result-box">
+    <h3 style="margin-top:0; color:var(--accent-light); font-size:1.1rem;">Upload Status</h3>
+    <pre id="output"></pre>
+  </div>
+</div>
+
+<script>
+function loadSampleOntology() {
+  const sample = {
+    "name": "Cloud Native Reliability",
+    "children": [
+      {
+        "name": "Service Mesh & Gateway",
+        "children": [
+          {"name": "mTLS Handshake Degradation"},
+          {"name": "Circuit Breaker Tripped"}
+        ]
+      },
+      {
+        "name": "Distributed Messaging",
+        "children": [
+          {"name": "Kafka Rebalance Storm"},
+          {"name": "Dead Letter Queue Saturation"}
+        ]
+      }
+    ]
+  };
+  document.getElementById("ontology-json").value = JSON.stringify(sample, null, 2);
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    document.getElementById("ontology-json").value = evt.target.result;
+  };
+  reader.readAsText(file);
+}
+
+async function submitOntology() {
+  const text = document.getElementById("ontology-json").value.trim();
+  if (!text) { alert("Please provide or upload ontology JSON content."); return; }
+  const btn = document.getElementById("btn-upload");
+  const box = document.getElementById("result-box");
+  const out = document.getElementById("output");
+
+  btn.disabled = true;
+  btn.textContent = "Importing...";
+  box.style.display = "block";
+  out.textContent = "Sending custom ontology to agent to expand taxonomy tree...";
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Import this custom ontology JSON structure into the taxonomy tree: " + text })
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.parts || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    out.textContent = reply || "Ontology processed.";
+    fetchTaxonomyTree();
+  } catch(err) {
+    out.textContent = "Error: " + err;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Upload & Expand Ontology";
+  }
+}
+
+async function fetchTaxonomyTree() {
+  const treeEl = document.getElementById("tree-display");
+  treeEl.textContent = "Fetching active taxonomy tree from Firestore...";
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Show the current dynamic taxonomy tree using view_taxonomy_tree" })
+    });
+    const data = await res.json();
+    let reply = "";
+    (data.parts || []).forEach(p => { if (p.kind === "text") reply += p.text + "\n\n"; });
+    treeEl.textContent = reply || "No tree data returned.";
+  } catch(err) {
+    treeEl.textContent = "Error: " + err;
+  }
+}
+</script>
+</body>
+</html>
