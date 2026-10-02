@@ -1,6 +1,6 @@
 # Post-Mortem RCA Report: INC-1001 - K8s payments-api pod crashlooping with OOMKilled
 
-**Status**: Resolved | **Severity**: SEV-1 | **Generated**: 2026-09-29 11:22:32 UTC
+**Status**: Resolved | **Severity**: SEV-1 | **Generated**: 2026-10-02 12:21:24 UTC
 
 ---
 
@@ -13,14 +13,14 @@
 - **Dynamic Taxonomy Path**: `Infrastructure & Runtime -> Kubernetes -> Pod Memory & Cgroups -> OOMKilled`
 
 ### Key Takeaway
-JVM heap unbounded growth exceeded container cgroup memory limits triggering kernel OOM killer.
+Identified Kubernetes incident in component 'Pod Memory & Cgroups' with failure mode 'OOMKilled'.
 
 ---
 
 ## 2. Technical Incident Description & Impact
 Payments-api pods on production cluster prod-us-east-1 started continuously restarting. kubectl describe pod reported Exit Code 137 (OOMKilled) during high volume checkout traffic. Memory limit was set to 512Mi, but JVM heap spiked past 600Mi due to unbounded cache allocation in order processing service.
 
-- **Involved Technology Footprint**: Kubernetes, JVM, Prometheus
+- **Involved Technology Footprint**: Kubernetes, JVM
 - **Assessed Severity**: SEV-1
 
 ---
