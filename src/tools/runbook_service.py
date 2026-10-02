@@ -99,9 +99,6 @@ RUNBOOKS_DB = [
 ]
 
 def search_runbooks(technology: str, failure_mechanism: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Searches the remediation runbooks repository by technology and failure mechanism keywords.
-    """
     tech_query = (technology or "").strip().lower()
     fail_query = (failure_mechanism or "").strip().lower()
 
@@ -117,8 +114,11 @@ def search_runbooks(technology: str, failure_mechanism: Optional[str] = None) ->
         if tech_match and fail_match:
             matches.append(rbk)
         elif tech_match and not matches:
+            # Best-effort: include the first tech-matching runbook even when the
+            # failure mechanism doesn't match, so callers always get something useful.
             matches.append(rbk)
 
+    # Safety net: return a generic triage template when no runbook matches at all.
     return matches or [
         {
             "id": "RBK-GENERIC-TRIAGE",

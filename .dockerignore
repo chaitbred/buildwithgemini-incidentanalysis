@@ -1,0 +1,52 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Tests
+tests/
+
+# Git
+.git/
+.gitignore
+
+# Claude Code
+.claude/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets — never bake credentials into the image
+.env
+*.env
+application_default_credentials.json
+*-sa-key.json
+service-account*.json
+
+# ADK session database (local dev artifact)
+agents/incident_analyst/.adk/
+
+# Docs and reports (not needed at runtime)
+README.md
+project_brief.md
+reports/
+
+# Frontend is a separate service with its own Dockerfile
+frontend/
+
+# Node (package.json is only used for local tooling)
+package.json
+node_modules/
+
+# Temporary / media
+.video_tmp/
+*.webm

@@ -1,23 +1,25 @@
-import csv
 import json
 import os
 import uuid
-from typing import List, Dict, Any, Generator
+from typing import List, Dict, Any, Generator, Optional
 import pandas as pd
 from src.models.incident import RawIncident, EnrichedIncident
 from src.agents.classifier_agent import MultiTechClassifierAgent
 from src.agents.taxonomy_agent import DynamicTaxonomyAgent
+
 
 class IncidentBatchProcessor:
     def __init__(
         self,
         classifier: MultiTechClassifierAgent,
         taxonomy_agent: DynamicTaxonomyAgent,
-        output_enriched_path: str = "data/enriched_incidents.json"
+        output_enriched_path: str = "data/enriched_incidents.json",
+        classification_hint: str = "",
     ):
         self.classifier = classifier
         self.taxonomy_agent = taxonomy_agent
         self.output_enriched_path = output_enriched_path
+        self.classification_hint = classification_hint
 
     @staticmethod
     def _find_field(row: Dict[str, Any], candidates: List[str], default: str = "") -> str:
@@ -42,15 +44,13 @@ class IncidentBatchProcessor:
             title=title,
             description=description,
             resolution=resolution,
-            severity=severity
+            severity=severity,
         )
 
     def iter_file_records(self, filepath: str, chunksize: int = 1000) -> Generator[List[RawIncident], None, None]:
         """
-        Memory-efficient streaming generator supporting files of any volume (thousands/millions of rows).
-        Supports:
-          - CSV (.csv) via chunked read
-          - Excel (.xlsx, .xls) via openpyxl streaming generator
+        Memory-efficient streaming generator supporting files of any volume.
+        Supports CSV (.csv) and Excel (.xlsx, .xls).
         """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"File not found: {filepath}")
@@ -58,7 +58,6 @@ class IncidentBatchProcessor:
         ext = os.path.splitext(filepath)[1].lower()
 
         if ext in [".xlsx", ".xls"]:
-            # Stream excel file rows without loading entire workbook into RAM
             import openpyxl
             wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
             sheet = wb.active
@@ -86,7 +85,6 @@ class IncidentBatchProcessor:
             wb.close()
 
         else:
-            # CSV stream with pandas chunksize
             row_idx = 1
             for df_chunk in pd.read_csv(filepath, chunksize=chunksize, dtype=str, on_bad_lines='skip'):
                 records = df_chunk.to_dict(orient="records")
@@ -97,19 +95,25 @@ class IncidentBatchProcessor:
                     row_idx += 1
                 yield chunk
 
-    def process_file_stream(self, filepath: str, max_incidents: int = 50000, progress_cb=None) -> List[EnrichedIncident]:
-        """Processes an Excel or CSV file of arbitrary volume."""
+    def process_file_stream(
+        self,
+        filepath: str,
+        max_incidents: int = 50000,
+        progress_cb=None,
+    ) -> List[EnrichedIncident]:
         all_enriched: List[EnrichedIncident] = []
         total_seen = 0
 
         for chunk in self.iter_file_records(filepath):
             for inc in chunk:
-                sig = self.classifier.classify_incident(inc)
+                sig = self.classifier.classify_incident(
+                    inc, classification_hint=self.classification_hint
+                )
                 path = self.taxonomy_agent.evolve_taxonomy(inc, sig)
                 enriched = EnrichedIncident(
                     incident=inc,
                     classification=sig,
-                    taxonomy_path=path
+                    taxonomy_path=path,
                 )
                 all_enriched.append(enriched)
                 total_seen += 1
@@ -121,7 +125,6 @@ class IncidentBatchProcessor:
             if total_seen >= max_incidents:
                 break
 
-        # Persist updated taxonomy and records
         self.taxonomy_agent.save()
 
         # Merge with existing enriched file if present
@@ -141,4 +144,5 @@ class IncidentBatchProcessor:
         return all_enriched
 
     def process_csv(self, csv_filepath: str) -> List[EnrichedIncident]:
+        # Kept for backward compatibility; delegates to process_file_stream.
         return self.process_file_stream(csv_filepath)

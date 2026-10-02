@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+google-genai
+google-adk
+google-cloud-firestore
+google-cloud-storage
+google-auth
+pandas
+openpyxl
+httpx

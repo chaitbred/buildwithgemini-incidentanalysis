@@ -1,44 +1,229 @@
 import os
 import json
-from typing import Optional, Dict, Any
+from typing import Optional
 from pydantic import BaseModel
 
+# =============================================================================
+# LLM Provider Configuration
+# =============================================================================
+# Select a provider by setting the LLM_PROVIDER environment variable.
+# Supported values: "gemini" (default) | "anthropic" | "openai"
+#
+# Each provider requires its own SDK and credentials:
+#
+# ── Gemini (Google AI / Vertex AI) ───────────────────────────────────────────
+#   LLM_PROVIDER=gemini
+#   GEMINI_API_KEY=<key from https://aistudio.google.com/app/apikey>
+#     or GOOGLE_API_KEY=<same key>
+#   LLM_MODEL=gemini-2.5-flash          (default; other options: gemini-1.5-pro)
+#   Install: pip install google-genai
+#
+# ── Anthropic (Claude) ───────────────────────────────────────────────────────
+#   LLM_PROVIDER=anthropic
+#   ANTHROPIC_API_KEY=<key from https://console.anthropic.com/settings/keys>
+#   LLM_MODEL=claude-opus-5-5           (default; other options: claude-sonnet-5-5,
+#                                        claude-haiku-4-5)
+#   Install: pip install anthropic
+#
+# ── OpenAI (GPT / Azure OpenAI) ──────────────────────────────────────────────
+#   LLM_PROVIDER=openai
+#   OPENAI_API_KEY=<key from https://platform.openai.com/api-keys>
+#   LLM_MODEL=gpt-4o                    (default; other options: gpt-4o-mini,
+#                                        gpt-4-turbo)
+#   For Azure OpenAI additionally set:
+#     OPENAI_API_BASE=https://<resource>.openai.azure.com/
+#     OPENAI_API_VERSION=2024-02-01
+#   Install: pip install openai
+# =============================================================================
+
+_PROVIDER_DEFAULTS = {
+    "gemini":    "gemini-2.5-flash",
+    "anthropic": "claude-opus-5-5",
+    "openai":    "gpt-4o",
+}
+
+
 class LLMClient:
+    """
+    Provider-agnostic LLM client for structured JSON generation.
+
+    The active provider is chosen at construction time (LLM_PROVIDER env var).
+    When no API key is available or the provider SDK is not installed, the
+    client falls back to a deterministic heuristic extractor so the pipeline
+    can still run offline or in test environments.
+    """
+
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+        self.model = os.getenv("LLM_MODEL", _PROVIDER_DEFAULTS.get(self.provider, "gemini-2.5-flash"))
         self.client = None
-        if self.api_key:
-            try:
-                from google import genai
-                self.client = genai.Client(api_key=self.api_key)
-            except Exception as e:
-                print(f"[LLMClient] Could not initialize google.genai: {e}")
+        self._init_provider(api_key)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Provider initialisation
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _init_provider(self, api_key: Optional[str]) -> None:
+        if self.provider == "gemini":
+            self._init_gemini(api_key)
+        elif self.provider == "anthropic":
+            self._init_anthropic(api_key)
+        elif self.provider == "openai":
+            self._init_openai(api_key)
+        else:
+            print(f"[LLMClient] Unknown LLM_PROVIDER='{self.provider}'. "
+                  "Supported: gemini | anthropic | openai. Falling back to heuristics.")
+
+    def _init_gemini(self, api_key: Optional[str]) -> None:
+        key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not key:
+            print("[LLMClient] No Gemini API key found (GEMINI_API_KEY / GOOGLE_API_KEY). "
+                  "Running in heuristic-only mode.")
+            return
+        try:
+            from google import genai
+            self.client = genai.Client(api_key=key)
+        except ImportError:
+            print("[LLMClient] google-genai not installed. Run: pip install google-genai")
+        except Exception as e:
+            print(f"[LLMClient] Could not initialise Gemini client: {e}")
+
+    def _init_anthropic(self, api_key: Optional[str]) -> None:
+        key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not key:
+            print("[LLMClient] No Anthropic API key found (ANTHROPIC_API_KEY). "
+                  "Running in heuristic-only mode.")
+            return
+        try:
+            import anthropic as _anthropic
+            self.client = _anthropic.Anthropic(api_key=key)
+        except ImportError:
+            print("[LLMClient] anthropic not installed. Run: pip install anthropic")
+        except Exception as e:
+            print(f"[LLMClient] Could not initialise Anthropic client: {e}")
+
+    def _init_openai(self, api_key: Optional[str]) -> None:
+        key = api_key or os.getenv("OPENAI_API_KEY")
+        if not key:
+            print("[LLMClient] No OpenAI API key found (OPENAI_API_KEY). "
+                  "Running in heuristic-only mode.")
+            return
+        try:
+            import openai as _openai
+            kwargs = {"api_key": key}
+            base_url = os.getenv("OPENAI_API_BASE")
+            if base_url:
+                kwargs["base_url"] = base_url
+            self.client = _openai.OpenAI(**kwargs)
+        except ImportError:
+            print("[LLMClient] openai not installed. Run: pip install openai")
+        except Exception as e:
+            print(f"[LLMClient] Could not initialise OpenAI client: {e}")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Public interface
+    # ──────────────────────────────────────────────────────────────────────────
 
     def is_live(self) -> bool:
         return self.client is not None
 
     def generate_structured(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
-        if self.client:
-            try:
-                # Use Gemini 2.5 Flash for rapid, structured inference
-                response = self.client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                    config={
-                        "response_mime_type": "application/json",
-                        "response_schema": response_schema,
-                        "temperature": 0.1
-                    }
-                )
-                return response_schema.model_validate_json(response.text)
-            except Exception as e:
-                print(f"[LLMClient] Gemini generation failed: {e}. Falling back to rule-based extractor.")
+        """
+        Send *prompt* to the configured LLM and parse the response into an
+        instance of *response_schema* (a Pydantic model).
 
-        # Fallback heuristic / semantic extractor for offline or keyless runs
+        Falls back to the deterministic heuristic extractor when the client is
+        unavailable or the API call fails.
+        """
+        if self.client is None:
+            return self._heuristic_extractor(prompt, response_schema)
+
+        try:
+            if self.provider == "gemini":
+                return self._generate_gemini(prompt, response_schema)
+            elif self.provider == "anthropic":
+                return self._generate_anthropic(prompt, response_schema)
+            elif self.provider == "openai":
+                return self._generate_openai(prompt, response_schema)
+        except Exception as e:
+            print(f"[LLMClient] {self.provider} generation failed: {e}. "
+                  "Falling back to rule-based extractor.")
+
         return self._heuristic_extractor(prompt, response_schema)
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Provider-specific generation
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _generate_gemini(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
+        # Gemini supports native structured output via response_schema.
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": response_schema,
+                "temperature": 0.1,
+            },
+        )
+        return response_schema.model_validate_json(response.text)
+
+    def _generate_anthropic(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
+        # Anthropic does not have a dedicated structured-output parameter;
+        # we embed the JSON schema in the system prompt and parse the response.
+        schema_str = json.dumps(response_schema.model_json_schema(), indent=2)
+        system = (
+            "You are a precise JSON extraction engine. "
+            "Respond ONLY with a single valid JSON object that conforms to the schema below. "
+            "Do not include any explanation, markdown, or extra text.\n\n"
+            f"Schema:\n{schema_str}"
+        )
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=4096,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw_text = next(
+            (block.text for block in response.content if block.type == "text"), ""
+        )
+        return response_schema.model_validate_json(raw_text)
+
+    def _generate_openai(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
+        # OpenAI supports structured outputs natively via response_format with
+        # a json_schema type. The schema is derived from the Pydantic model.
+        schema = response_schema.model_json_schema()
+        response = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0.1,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_schema.__name__,
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a precise JSON extraction engine. "
+                        "Return only a JSON object matching the provided schema."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+        raw_text = response.choices[0].message.content or ""
+        return response_schema.model_validate_json(raw_text)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Heuristic fallback (no API key / offline)
+    # ──────────────────────────────────────────────────────────────────────────
+
     def _heuristic_extractor(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
-        """High-accuracy deterministic fallback to allow testing without an API key."""
+        """High-accuracy deterministic fallback for offline or keyless runs."""
         # Isolate the incident payload from the prompt instructions
         incident_text = prompt
         if "Incident Title:" in prompt and "Instructions:" in prompt:
@@ -147,7 +332,6 @@ class LLMClient:
             failure = "Registry Rate Limiting (429)"
             pattern = "Registry Mirroring & Credentials Injection"
 
-        # Build signature
         sig = TechStackSignature(
             technologies=techs or ["Linux System"],
             primary_technology=primary,
@@ -155,7 +339,10 @@ class LLMClient:
             failure_mechanism=failure,
             root_cause_domain=domain,
             resolution_pattern=pattern,
-            confidence=0.92,
-            summary_insight=f"Identified {primary} incident in component '{comp}' with failure mode '{failure}'."
+            confidence=0.92,  # fixed score to distinguish heuristic output from LLM output (LLM returns its own float)
+            summary_insight=(
+                f"Identified {primary} incident in component '{comp}' "
+                f"with failure mode '{failure}'."
+            ),
         )
         return sig

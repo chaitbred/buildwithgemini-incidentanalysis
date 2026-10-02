@@ -21,6 +21,7 @@ class DynamicTaxonomyAgent:
                     data = json.load(f)
                     self.tree = DynamicTaxonomyTree.model_validate(data)
             except Exception as e:
+                # Corrupt or incompatible file: start fresh rather than crashing the pipeline.
                 print(f"[TaxonomyAgent] Warning: could not load existing taxonomy: {e}")
                 self.tree = DynamicTaxonomyTree()
         else:
@@ -32,7 +33,6 @@ class DynamicTaxonomyAgent:
             f.write(self.tree.model_dump_json(indent=2))
 
     def import_custom_ontology(self, ontology_def: Dict[str, Any] | List[Dict[str, Any]]) -> int:
-        """Seeds or extends the taxonomy tree with custom nodes."""
         added = self.tree.import_custom_ontology(ontology_def)
         self.save()
         return added
