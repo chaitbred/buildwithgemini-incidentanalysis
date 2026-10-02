@@ -75,8 +75,6 @@ class LLMClient:
                   "Supported: gemini | anthropic | openai. Falling back to heuristics.")
 
     def _init_gemini(self, api_key: Optional[str]) -> None:
-        # Required env var: GEMINI_API_KEY or GOOGLE_API_KEY
-        # Install:          pip install google-genai
         key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not key:
             print("[LLMClient] No Gemini API key found (GEMINI_API_KEY / GOOGLE_API_KEY). "
@@ -91,8 +89,6 @@ class LLMClient:
             print(f"[LLMClient] Could not initialise Gemini client: {e}")
 
     def _init_anthropic(self, api_key: Optional[str]) -> None:
-        # Required env var: ANTHROPIC_API_KEY
-        # Install:          pip install anthropic
         key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not key:
             print("[LLMClient] No Anthropic API key found (ANTHROPIC_API_KEY). "
@@ -107,9 +103,6 @@ class LLMClient:
             print(f"[LLMClient] Could not initialise Anthropic client: {e}")
 
     def _init_openai(self, api_key: Optional[str]) -> None:
-        # Required env var:  OPENAI_API_KEY
-        # Optional env vars: OPENAI_API_BASE (Azure endpoint), OPENAI_API_VERSION
-        # Install:           pip install openai
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
             print("[LLMClient] No OpenAI API key found (OPENAI_API_KEY). "
@@ -346,7 +339,7 @@ class LLMClient:
             failure_mechanism=failure,
             root_cause_domain=domain,
             resolution_pattern=pattern,
-            confidence=0.92,
+            confidence=0.92,  # fixed score to distinguish heuristic output from LLM output (LLM returns its own float)
             summary_insight=(
                 f"Identified {primary} incident in component '{comp}' "
                 f"with failure mode '{failure}'."

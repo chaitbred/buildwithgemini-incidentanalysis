@@ -7,7 +7,6 @@ from src.backend.firestore_client import get_incident_from_firestore
 REPORTS_DIR = os.path.abspath("reports")
 
 def generate_postmortem_markdown(incident_data: Dict[str, Any]) -> str:
-    """Generates a complete post-mortem RCA report in markdown format."""
     inc_id = incident_data.get("incident_id", "UNKNOWN")
     title = incident_data.get("title", "Untitled Incident")
     severity = incident_data.get("severity", "SEV-2")

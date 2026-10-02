@@ -309,7 +309,6 @@ def get_taxonomy(project_id: str = Query(default="default")):
 
 @app.post("/api/taxonomy/custom")
 async def add_custom_ontology(request: Request, project_id: str = Query(default="default")):
-    """Import a custom taxonomy/ontology definition into the project's tree."""
     try:
         payload = await request.json()
         agent = _get_taxonomy_agent(project_id)

@@ -224,7 +224,6 @@ class CosmosDBStorage(StorageBackend):
             existing = self.get_project(project_id)
             if not existing:
                 return False
-            # Delete all incidents
             inc_docs = list(self._incidents.query_items(
                 query="SELECT c.id FROM c WHERE c.project_id = @pid",
                 parameters=[{"name": "@pid", "value": project_id}],
@@ -232,13 +231,11 @@ class CosmosDBStorage(StorageBackend):
             ))
             for doc in inc_docs:
                 self._incidents.delete_item(item=doc["id"], partition_key=project_id)
-            # Delete taxonomy
             try:
                 doc_id = f"{project_id}::taxonomy"
                 self._taxonomy.delete_item(item=doc_id, partition_key=doc_id)
             except Exception:
                 pass
-            # Delete project record
             self._projects.delete_item(item=project_id, partition_key=project_id)
             return True
         except Exception as e:

@@ -209,10 +209,10 @@ class FirestoreStorage(StorageBackend):
             proj_ref = self._db.collection(_PROJECTS_COLLECTION).document(project_id)
             if not proj_ref.get().exists:
                 return False
-            # Delete all incidents in the sub-collection
+            # Firestore does NOT cascade-delete subcollections when a parent document
+            # is deleted, so incidents and taxonomy must be removed explicitly first.
             for doc in self._incidents_col(project_id).stream():
                 doc.reference.delete()
-            # Delete taxonomy docs
             for doc in self._taxonomy_col(project_id).stream():
                 doc.reference.delete()
             proj_ref.delete()

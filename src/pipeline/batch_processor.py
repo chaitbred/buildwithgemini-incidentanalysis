@@ -101,7 +101,6 @@ class IncidentBatchProcessor:
         max_incidents: int = 50000,
         progress_cb=None,
     ) -> List[EnrichedIncident]:
-        """Process an Excel or CSV file and return enriched incidents."""
         all_enriched: List[EnrichedIncident] = []
         total_seen = 0
 
@@ -145,4 +144,5 @@ class IncidentBatchProcessor:
         return all_enriched
 
     def process_csv(self, csv_filepath: str) -> List[EnrichedIncident]:
+        # Kept for backward compatibility; delegates to process_file_stream.
         return self.process_file_stream(csv_filepath)

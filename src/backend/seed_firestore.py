@@ -1,3 +1,12 @@
+"""
+Seed script: writes the five canonical incident fixtures into Firestore.
+
+Run once (or re-run safely — batch.set uses merge=True so it is idempotent):
+    python -m src.backend.seed_firestore
+
+Requires GOOGLE_APPLICATION_CREDENTIALS or Application Default Credentials
+pointing to the target GCP project.
+"""
 import json
 import os
 import sys

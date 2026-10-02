@@ -40,7 +40,6 @@ class DynamicTaxonomyTree(BaseModel):
             )
             self.nodes[node_id] = new_node
             
-            # Register in parent's children list
             if parent_id in self.nodes and node_id not in self.nodes[parent_id].children:
                 self.nodes[parent_id].children.append(node_id)
         elif is_custom:

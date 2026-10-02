@@ -133,6 +133,9 @@ class DynamoDBStorage(StorageBackend):
 
             kwargs: Dict[str, Any] = {
                 "KeyConditionExpression": Key("project_id").eq(project_id),
+                # DynamoDB applies Limit BEFORE FilterExpression, so the actual
+                # number of returned items may be lower than `limit` when filters
+                # are active. Acceptable for analytics reads; not for strict paging.
                 "Limit": limit,
             }
             if filters:
@@ -217,7 +220,6 @@ class DynamoDBStorage(StorageBackend):
             existing = self.get_project(project_id)
             if not existing:
                 return False
-            # Delete all incidents for this project
             from boto3.dynamodb.conditions import Key
             resp = self._incidents.query(
                 KeyConditionExpression=Key("project_id").eq(project_id)
@@ -227,9 +229,7 @@ class DynamoDBStorage(StorageBackend):
                     batch.delete_item(
                         Key={"project_id": project_id, "incident_id": item["incident_id"]}
                     )
-            # Delete taxonomy
             self._taxonomy.delete_item(Key={"doc_id": f"{project_id}::taxonomy"})
-            # Delete project record
             self._projects.delete_item(Key={"project_id": project_id})
             return True
         except Exception as e:
