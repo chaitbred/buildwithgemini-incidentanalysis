@@ -1,11 +1,17 @@
 import json
 import os
+import re
 import uuid
 from typing import List, Dict, Any, Generator, Optional
 import pandas as pd
 from src.models.incident import RawIncident, EnrichedIncident
 from src.agents.classifier_agent import MultiTechClassifierAgent
 from src.agents.taxonomy_agent import DynamicTaxonomyAgent
+
+
+def _norm(s: str) -> str:
+    """Normalize a column header: lowercase, strip spaces/underscores/hyphens."""
+    return re.sub(r'[\s_\-]+', '', s).lower()
 
 
 class IncidentBatchProcessor:
@@ -23,21 +29,45 @@ class IncidentBatchProcessor:
 
     @staticmethod
     def _find_field(row: Dict[str, Any], candidates: List[str], default: str = "") -> str:
+        # Build a normalized-key → (original_key, value) lookup once per row
+        norm_map: Dict[str, tuple] = {}
+        for k in row.keys():
+            if k:
+                norm_map[_norm(str(k))] = (k, row[k])
+
         for c in candidates:
-            for k in row.keys():
-                if k and str(k).strip().lower() == c.lower():
-                    val = row.get(k)
-                    if pd.notna(val) and val is not None:
-                        return str(val).strip()
+            entry = norm_map.get(_norm(c))
+            if entry:
+                val = entry[1]
+                if pd.notna(val) and val is not None:
+                    return str(val).strip()
         return default
 
     @classmethod
     def parse_incident_row(cls, row: Dict[str, Any], fallback_id: str) -> RawIncident:
-        inc_id = cls._find_field(row, ["incident_id", "id", "ticket_id", "number", "key", "issue_key"], fallback_id)
-        title = cls._find_field(row, ["title", "summary", "short_description", "headline", "subject", "name"], "Untitled Incident")
-        description = cls._find_field(row, ["description", "details", "body", "issue_description", "logs", "content"], title)
-        resolution = cls._find_field(row, ["resolution", "resolution_notes", "root_cause_notes", "fix", "solution", "close_notes"], "")
+        inc_id = cls._find_field(row, ["incident_id", "id", "ticket_id", "number", "key", "issue_key", "incident_sheet"], fallback_id)
+        # "description" added last so SAP files (where Description = short summary) still map here as a fallback
+        title = cls._find_field(row, ["title", "summary", "short_description", "headline", "subject", "name", "description"], "Untitled Incident")
+        # Prefer extended/full description over the short one; fall back to title text
+        description = cls._find_field(row, ["extended_description", "extended_desc", "extended desc", "details", "body", "issue_description", "logs", "content", "description"], title)
+        # SAP: Latest Comment or Solution Category carry resolution context
+        resolution = cls._find_field(row, ["resolution", "resolution_notes", "root_cause_notes", "fix", "solution", "close_notes", "latest_comment", "solution_category"], "")
         severity = cls._find_field(row, ["severity", "priority", "urgency", "impact"], "SEV-3")
+
+        # Append SAP-specific metadata to description so the classifier can use it.
+        # Only use the actual SAP Component code field — never the numeric Configuration Item CI ID.
+        sap_comp = cls._find_field(row, ["sap_component", "sap component"], "")
+        system_id = cls._find_field(row, ["system_id", "system id", "systemid"], "")
+        support_team = cls._find_field(row, ["support_team", "support team", "supportteam", "service_team", "service team"], "")
+        if sap_comp or system_id or support_team:
+            meta_parts = []
+            if sap_comp:
+                meta_parts.append(f"SAP Component: {sap_comp}")
+            if system_id:
+                meta_parts.append(f"System ID: {system_id}")
+            if support_team:
+                meta_parts.append(f"Support Team: {support_team}")
+            description = description + " [" + "; ".join(meta_parts) + "]"
 
         return RawIncident(
             incident_id=inc_id,
@@ -60,7 +90,20 @@ class IncidentBatchProcessor:
         if ext in [".xlsx", ".xls"]:
             import openpyxl
             wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-            sheet = wb.active
+            # Pick the sheet with the most non-empty header columns (avoids pivot/summary sheets)
+            best_sheet = wb.active
+            best_col_count = 0
+            for ws in wb.worksheets:
+                rows = ws.iter_rows(values_only=True)
+                try:
+                    hdr = next(rows)
+                    col_count = sum(1 for h in hdr if h is not None)
+                    if col_count > best_col_count:
+                        best_col_count = col_count
+                        best_sheet = ws
+                except StopIteration:
+                    pass
+            sheet = best_sheet
             rows_iter = sheet.iter_rows(values_only=True)
             try:
                 header_row = next(rows_iter)

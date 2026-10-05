@@ -11,11 +11,21 @@ from pydantic import BaseModel
 #
 # Each provider requires its own SDK and credentials:
 #
-# ── Gemini (Google AI / Vertex AI) ───────────────────────────────────────────
+# ── Gemini — API key (Google AI Studio) ──────────────────────────────────────
 #   LLM_PROVIDER=gemini
 #   GEMINI_API_KEY=<key from https://aistudio.google.com/app/apikey>
 #     or GOOGLE_API_KEY=<same key>
-#   LLM_MODEL=gemini-2.5-flash          (default; other options: gemini-1.5-pro)
+#   LLM_MODEL=gemini-2.5-flash          (default; other options: gemini-1.5-pro,
+#                                        gemini-3.1-flash-lite)
+#   Install: pip install google-genai
+#
+# ── Gemini — Vertex AI / custom endpoint (e.g. Accenture frictionless) ───────
+#   LLM_PROVIDER=gemini
+#   GEMINI_VERTEX=true
+#   GEMINI_PROJECT=<gcp-project-id>     e.g. gcp-frictionless-spoke-3
+#   GEMINI_LOCATION=global              (or us-central1, etc.)
+#   GEMINI_BASE_URL=<proxy-base-url>    e.g. https://frictionless-infra.accenture.com/gcp-learning
+#   LLM_MODEL=gemini-3.1-flash-lite
 #   Install: pip install google-genai
 #
 # ── Anthropic (Claude) ───────────────────────────────────────────────────────
@@ -37,7 +47,7 @@ from pydantic import BaseModel
 # =============================================================================
 
 _PROVIDER_DEFAULTS = {
-    "gemini":    "gemini-2.5-flash",
+    "gemini":    "gemini-3.1-flash-lite",
     "anthropic": "claude-opus-5-5",
     "openai":    "gpt-4o",
 }
@@ -75,16 +85,40 @@ class LLMClient:
                   "Supported: gemini | anthropic | openai. Falling back to heuristics.")
 
     def _init_gemini(self, api_key: Optional[str]) -> None:
+        try:
+            from google import genai
+            from google.genai.types import HttpOptions
+        except ImportError:
+            print("[LLMClient] google-genai not installed. Run: pip install google-genai")
+            return
+
+        # Vertex AI mode: used for corporate proxies (e.g. Accenture frictionless)
+        # that front Vertex AI with a custom base URL instead of an API key.
+        if os.getenv("GEMINI_VERTEX", "").lower() in ("1", "true", "yes"):
+            project = os.getenv("GEMINI_PROJECT", "")
+            location = os.getenv("GEMINI_LOCATION", "global")
+            base_url = os.getenv("GEMINI_BASE_URL", "")
+            if not project:
+                print("[LLMClient] GEMINI_VERTEX=true but GEMINI_PROJECT is not set. "
+                      "Running in heuristic-only mode.")
+                return
+            try:
+                kwargs = dict(vertexai=True, project=project, location=location)
+                if base_url:
+                    kwargs["http_options"] = HttpOptions(base_url=base_url)
+                self.client = genai.Client(**kwargs)
+            except Exception as e:
+                print(f"[LLMClient] Could not initialise Vertex AI Gemini client: {e}")
+            return
+
+        # Standard API key mode (Google AI Studio)
         key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not key:
             print("[LLMClient] No Gemini API key found (GEMINI_API_KEY / GOOGLE_API_KEY). "
                   "Running in heuristic-only mode.")
             return
         try:
-            from google import genai
             self.client = genai.Client(api_key=key)
-        except ImportError:
-            print("[LLMClient] google-genai not installed. Run: pip install google-genai")
         except Exception as e:
             print(f"[LLMClient] Could not initialise Gemini client: {e}")
 
@@ -331,6 +365,100 @@ class LLMClient:
             comp = "Container Registry"
             failure = "Registry Rate Limiting (429)"
             pattern = "Registry Mirroring & Credentials Injection"
+
+        # ── SAP ERP patterns ─────────────────────────────────────────────────
+        # Priority: match explicit [SAP Component: XX] or Support Team text injected by parser
+        elif any(k in text for k in ["sap component: bc-sec", "bc-sec-aut", "bc-sec-usr",
+                                     "authorization", "authorisation", "su53", "role assignment",
+                                     "user locked", "auth object", "pfcg",
+                                     "support team: it_sup_2_02", "support team: it_sup_3_16",
+                                     "taf author"]):
+            techs.append("SAP Basis")
+            primary = "SAP Basis Security"
+            domain = "Security & Access Management"
+            if any(k in text for k in ["user locked", "logon", "password", "su53", "bc-sec-usr"]):
+                comp = "User Administration (BC-SEC-USR)"
+                failure = "User Logon / Lock Issue"
+                pattern = "Account Unlock & Role Assignment"
+            else:
+                comp = "Authorization Management (BC-SEC-AUT)"
+                failure = "Authorization Check Failure"
+                pattern = "Role & Auth Object Correction"
+
+        elif any(k in text for k in ["sap component: mm-iv", "mm-iv", "invoice verification",
+                                     "miro", "liv", "logistic invoice",
+                                     "invoice verif", "tfcpiv", "bp1tfcpiv"]):
+            techs.append("SAP MM")
+            primary = "SAP Materials Management"
+            domain = "ERP & Business Applications"
+            comp = "Invoice Verification (MM-IV)"
+            failure = "Invoice Posting / Matching Error"
+            pattern = "Invoice Reprocessing & Tolerance Config"
+
+        elif any(k in text for k in ["sap component: mm", "mm-pur", "mm-im", "mm-pur-req",
+                                     "purchase order", "purchase requisition", "goods receipt",
+                                     "material document", "migo", "me21", "me51",
+                                     "support team: bp1_l2_ppa", "support team: bp1_l2_pa",
+                                     "purchase accounting", "goods receipt process"]):
+            techs.append("SAP MM")
+            primary = "SAP Materials Management"
+            domain = "ERP & Business Applications"
+            if any(k in text for k in ["mm-pur", "purchase order", "purchase requisition", "me21", "me51"]):
+                comp = "Purchasing (MM-PUR)"
+                failure = "Purchase Order / Requisition Processing Failure"
+                pattern = "Approval Workflow & Org Structure Correction"
+            elif any(k in text for k in ["mm-im", "goods receipt", "migo", "material document"]):
+                comp = "Inventory Management (MM-IM)"
+                failure = "Goods Receipt / Material Document Error"
+                pattern = "Posting Period & Stock Correction"
+            else:
+                comp = "Materials Management Core"
+                failure = "MM Transaction Processing Error"
+                pattern = "Master Data & Config Correction"
+
+        elif any(k in text for k in ["sap component: co", "co-om", "co-pa",
+                                     "cost center", "profit center", "overhead", "controlling",
+                                     "internal order", "settlement"]):
+            techs.append("SAP CO")
+            primary = "SAP Controlling"
+            domain = "ERP & Business Applications"
+            comp = "Overhead Controlling (CO-OM)"
+            failure = "Cost Allocation / Settlement Error"
+            pattern = "Cost Center & Order Config Correction"
+
+        elif any(k in text for k in ["sap component: sd", "sales order", "delivery", "billing",
+                                     "vf01", "va01", "vl01"]):
+            techs.append("SAP SD")
+            primary = "SAP Sales & Distribution"
+            domain = "ERP & Business Applications"
+            comp = "Order-to-Cash (SD)"
+            failure = "Sales Order / Billing Processing Error"
+            pattern = "Pricing & Output Config Correction"
+
+        elif any(k in text for k in ["sap component: bc", "abap", "short dump", "st22",
+                                     "sm50", "sm66", "transport", "sap note"]):
+            techs.append("SAP Basis")
+            primary = "SAP Basis"
+            domain = "ERP & Business Applications"
+            comp = "ABAP / Basis Core (BC)"
+            failure = "System Error / Short Dump"
+            pattern = "SAP Note Application & Transport"
+
+        elif any(k in text for k in ["sap component: ca", "aif", "fiori", "ca-flp", "ui5"]):
+            techs.append("SAP CA")
+            primary = "SAP Cross-Application"
+            domain = "ERP & Business Applications"
+            comp = "Cross-Application Framework (CA)"
+            failure = "Cross-Application Integration Error"
+            pattern = "AIF / Fiori Config & Correction"
+
+        elif any(k in text for k in ["sap", "ers processing", "erp"]):
+            techs.append("SAP ERP")
+            primary = "SAP ERP"
+            domain = "ERP & Business Applications"
+            comp = "SAP Application"
+            failure = "ERP Transaction / Processing Error"
+            pattern = "Configuration & Master Data Correction"
 
         sig = TechStackSignature(
             technologies=techs or ["Linux System"],
