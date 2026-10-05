@@ -2,25 +2,22 @@ from typing import Optional
 from src.models.incident import RawIncident, TechStackSignature
 from src.agents.base_llm import LLMClient
 
-EXTRACTION_PROMPT = """
-You are an expert Autonomous Site Reliability & Incident Investigator.
-Analyze the following incident title, description, and resolution notes.
-Extract a structured multi-technology technical signature.
+# Hard caps prevent runaway token usage on verbose incident descriptions.
+# P99 useful signal fits within these bounds; excess text is noise.
+_MAX_DESC_CHARS = 1200
+_MAX_RES_CHARS = 600
 
-Incident Title: {title}
-Severity: {severity}
+# Compact prompt — field names in the response schema already define the
+# extraction targets, so verbose per-field instructions are redundant.
+EXTRACTION_PROMPT = """\
+SRE incident analyst. Extract a structured JSON tech-stack signature from the incident below.
+
+Title: {title} | Severity: {severity}
 Description: {description}
-Resolution Notes: {resolution}
-
-Instructions:
-1. Identify all technologies/tools mentioned or involved (e.g., Kubernetes, JVM, PostgreSQL, pgbouncer, Envoy, Docker, Kafka).
-2. Pinpoint the primary technology where the fault originated or manifested.
-3. Identify the specific subcomponent (e.g. 'CoreDNS', 'Kubelet', 'Connection Pool', 'Consumer Group', 'Shard Allocation').
-4. Identify the precise failure mechanism (e.g. 'OOMKilled', 'Connection Pool Starvation', 'Replication Lag Saturation', '504 Gateway Timeout').
-5. Map to a high-level Root Cause Domain (e.g. 'Infrastructure & Runtime', 'Database & Storage', 'Messaging & Streaming', 'Networking & Ingress', 'Security & Cloud Access').
-6. Classify the Resolution Pattern (e.g. 'Resource Limit Tuning', 'Index & Query Optimization', 'Canary Rollback', 'Scaling & Circuit Breaking').
-7. Provide a concise summary insight.
-{hint_section}"""
+Resolution: {resolution}
+{hint_section}
+Return all fields: technologies (list), primary_technology, component, \
+failure_mechanism, root_cause_domain, resolution_pattern, confidence (0-1), summary_insight."""
 
 
 class MultiTechClassifierAgent:
@@ -40,15 +37,17 @@ class MultiTechClassifierAgent:
         Prioritise PCI-DSS and payment-related failure modes.').
         """
         hint_section = (
-            f"\nProject context: {classification_hint.strip()}"
+            f"Project context: {classification_hint.strip()}"
             if classification_hint and classification_hint.strip()
             else ""
         )
+        desc = incident.description[:_MAX_DESC_CHARS]
+        res = (incident.resolution or "No resolution provided")[:_MAX_RES_CHARS]
         prompt = EXTRACTION_PROMPT.format(
             title=incident.title,
             severity=incident.severity or "Unknown",
-            description=incident.description,
-            resolution=incident.resolution or "No resolution provided",
+            description=desc,
+            resolution=res,
             hint_section=hint_section,
         )
         return self.llm.generate_structured(prompt, TechStackSignature)
