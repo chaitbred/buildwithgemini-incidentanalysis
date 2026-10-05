@@ -43,6 +43,21 @@ _PROVIDER_DEFAULTS = {
 }
 
 
+def _strip_schema_descriptions(node: object) -> object:
+    """Recursively remove 'description' and 'title' keys from a JSON schema dict.
+
+    Pydantic-generated schemas embed human-readable descriptions on every field.
+    Those strings cost ~300-500 extra input tokens per API call without changing
+    model behaviour — the field names alone are sufficient for extraction tasks.
+    """
+    if isinstance(node, dict):
+        return {k: _strip_schema_descriptions(v) for k, v in node.items()
+                if k not in ("description", "title")}
+    if isinstance(node, list):
+        return [_strip_schema_descriptions(item) for item in node]
+    return node
+
+
 class LLMClient:
     """
     Provider-agnostic LLM client for structured JSON generation.
@@ -169,18 +184,23 @@ class LLMClient:
         return response_schema.model_validate_json(response.text)
 
     def _generate_anthropic(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
-        # Anthropic does not have a dedicated structured-output parameter;
-        # we embed the JSON schema in the system prompt and parse the response.
-        schema_str = json.dumps(response_schema.model_json_schema(), indent=2)
-        system = (
-            "You are a precise JSON extraction engine. "
-            "Respond ONLY with a single valid JSON object that conforms to the schema below. "
-            "Do not include any explanation, markdown, or extra text.\n\n"
-            f"Schema:\n{schema_str}"
+        # Strip verbose field descriptions before serialising — saves ~400 tokens
+        # per call while the field names remain sufficient for extraction.
+        compact = _strip_schema_descriptions(response_schema.model_json_schema())
+        schema_str = json.dumps(compact)
+        system_text = (
+            "JSON extraction engine. "
+            "Reply ONLY with a single valid JSON object matching the schema. "
+            "No explanation, markdown, or extra text.\n\n"
+            f"Schema:{schema_str}"
         )
+        # cache_control marks the system block for Anthropic prompt caching.
+        # Repeated calls within a cache TTL (~5 min) pay only ~10% of input cost
+        # for these tokens — critical for batch processing thousands of incidents.
+        system = [{"type": "text", "text": system_text, "cache_control": {"type": "ephemeral"}}]
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=800,
             system=system,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -190,9 +210,9 @@ class LLMClient:
         return response_schema.model_validate_json(raw_text)
 
     def _generate_openai(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
-        # OpenAI supports structured outputs natively via response_format with
-        # a json_schema type. The schema is derived from the Pydantic model.
-        schema = response_schema.model_json_schema()
+        # Strip verbose descriptions to reduce input tokens; OpenAI strict mode
+        # does not require them — field names are sufficient for extraction.
+        schema = _strip_schema_descriptions(response_schema.model_json_schema())
         response = self.client.chat.completions.create(
             model=self.model,
             temperature=0.1,
