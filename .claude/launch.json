@@ -5,7 +5,10 @@
       "name": "FastAPI Dev Server",
       "runtimeExecutable": ".venv/Scripts/python",
       "runtimeArgs": ["-m", "uvicorn", "src.web.app:app", "--reload", "--host", "0.0.0.0", "--port", "8080"],
-      "port": 8080
+      "port": 8080,
+      "env": {
+        "GEMINI_API_KEY": "YOUR_GEMINI_API_KEY_HERE"
+      }
     }
   ]
 }
