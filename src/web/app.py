@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from src.models.incident import RawIncident, EnrichedIncident
 from src.models.project import Project, ProjectSettings
+from src.agents.base_llm import LLMUnavailableError
 from src.agents.classifier_agent import MultiTechClassifierAgent
 from src.agents.taxonomy_agent import DynamicTaxonomyAgent
 from src.pipeline.batch_processor import IncidentBatchProcessor
@@ -400,6 +401,26 @@ def get_analytics(project_id: str = Query(default="default")):
     })
 
 
+def _llm_unavailable_response(e: LLMUnavailableError, processor: IncidentBatchProcessor) -> JSONResponse:
+    """503 with how far the run got; partial results are already saved by the processor."""
+    stats = getattr(e, "stats", None) or processor.last_run
+    logger.error("Analysis stopped, LLM unavailable: %s", e)
+    return JSONResponse(status_code=503, content={
+        "status": "llm_unavailable",
+        "error": str(e),
+        "processed_count": stats.get("processed", 0),
+        "failed_count": stats.get("failed", 0),
+        "remaining_count": stats.get("remaining", stats.get("to_process", 0) - stats.get("processed", 0)),
+        "total_rows": stats.get("total_rows", 0),
+        "partial_results_saved": stats.get("processed", 0) > 0,
+    })
+
+
+def _run_stats(processor: IncidentBatchProcessor) -> Dict[str, Any]:
+    r = processor.last_run
+    return {k: r.get(k) for k in ("total_rows", "batch_size", "workers", "batches", "failed")}
+
+
 @app.post("/api/classify_single")
 def classify_single(
     title: str = Form(...),
@@ -463,8 +484,11 @@ async def upload_file(
     try:
         size = os.path.getsize(tmp_path)
         logger.info("Upload received file=%r size=%d bytes project=%s", filename, size, project_id)
-        with log_timing(logger, "analysis (upload)", project=project_id, file=filename):
-            results = processor.process_file_stream(tmp_path)
+        try:
+            with log_timing(logger, "analysis (upload)", project=project_id, file=filename):
+                results = processor.process_file_stream(tmp_path)
+        except LLMUnavailableError as e:
+            return _llm_unavailable_response(e, processor)
         logger.info("Analysis complete project=%s file=%r processed=%d taxonomy_nodes=%d",
                     project_id, filename, len(results), len(agent.tree.nodes))
         return JSONResponse(content={
@@ -473,6 +497,7 @@ async def upload_file(
             "processed_count": len(results),
             "total_taxonomy_nodes": len(agent.tree.nodes),
             "project_id": project_id,
+            **_run_stats(processor),
         })
     finally:
         if os.path.exists(tmp_path):
@@ -496,13 +521,17 @@ def run_batch(project_id: str = Query(default="default")):
         output_enriched_path=_enriched_path(project_id),
         classification_hint=hint,
     )
-    with log_timing(logger, "analysis (sample batch)", project=project_id):
-        results = processor.process_csv(sample_csv)
+    try:
+        with log_timing(logger, "analysis (sample batch)", project=project_id):
+            results = processor.process_csv(sample_csv)
+    except LLMUnavailableError as e:
+        return _llm_unavailable_response(e, processor)
     logger.info("Sample batch complete project=%s processed=%d", project_id, len(results))
     return JSONResponse(content={
         "status": "success",
         "processed_count": len(results),
         "project_id": project_id,
+        **_run_stats(processor),
     })
 
 
@@ -1130,7 +1159,11 @@ def index_page():
       try {
         const res = await fetch('/api/upload_file', { method: 'POST', body: formData });
         const data = await res.json();
-        if (res.ok) { showToast(`Ingested ${data.processed_count} incidents from ${data.filename}!`); await loadData(); }
+        if (res.ok) { showToast(`Ingested ${data.processed_count}/${data.total_rows} incidents from ${data.filename} (${data.workers} workers, batches of ${data.batch_size})`); await loadData(); }
+        else if (data.status === 'llm_unavailable') {
+          showToast(`Stopped - LLM unavailable: ${data.error}. Processed ${data.processed_count}, remaining ${data.remaining_count}.`, true);
+          if (data.partial_results_saved) await loadData();
+        }
         else showToast(data.detail || 'Upload error', true);
       } catch (err) { showToast('Upload failed: ' + err, true); }
       finally { label.innerText = orig; event.target.value = ''; }
@@ -1141,8 +1174,11 @@ def index_page():
       btn.innerText = 'Processing...';
       btn.disabled = true;
       try {
-        await fetch('/api/run_batch?project_id=' + encodeURIComponent(currentProjectId), { method: 'POST' });
-        showToast('Sample batch processed!');
+        const res = await fetch('/api/run_batch?project_id=' + encodeURIComponent(currentProjectId), { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) { showToast(`Sample batch processed (${data.processed_count}/${data.total_rows} incidents)!`); }
+        else if (data.status === 'llm_unavailable') { showToast(`Stopped - LLM unavailable: ${data.error}`, true); }
+        else showToast(data.error || 'Batch failed', true);
         await loadData();
       } catch (err) { showToast('Batch failed: ' + err, true); }
       finally { btn.innerText = 'Sample Batch'; btn.disabled = false; }

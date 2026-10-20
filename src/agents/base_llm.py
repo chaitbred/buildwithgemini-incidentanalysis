@@ -8,6 +8,14 @@ from src.logging_config import get_logger
 
 logger = get_logger("llm.base")
 
+
+class LLMUnavailableError(RuntimeError):
+    """Raised in strict mode when the LLM is not configured or a call fails."""
+
+
+class _Ping(BaseModel):
+    ok: bool = True
+
 # =============================================================================
 # LLM Provider Configuration
 # =============================================================================
@@ -190,15 +198,48 @@ class LLMClient:
     def is_live(self) -> bool:
         return self.client is not None
 
-    def generate_structured(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
+    def _call_provider(self, prompt: str, response_schema: type[BaseModel]) -> Optional[BaseModel]:
+        if self.provider == "gemini":
+            return self._generate_gemini(prompt, response_schema)
+        if self.provider == "anthropic":
+            return self._generate_anthropic(prompt, response_schema)
+        if self.provider == "openai":
+            return self._generate_openai(prompt, response_schema)
+        return None
+
+    def check_available(self) -> None:
+        """Preflight: raise LLMUnavailableError unless a live test call succeeds."""
+        if self.client is None:
+            raise LLMUnavailableError(
+                f"LLM not configured (provider={self.provider}, model={self.model}): "
+                "missing API key, credentials or SDK package"
+            )
+        start = time.perf_counter()
+        try:
+            result = self._call_provider("Reply with JSON {\"ok\": true}.", _Ping)
+        except Exception as e:
+            logger.exception("LLM preflight failed: provider=%s model=%s", self.provider, self.model)
+            raise LLMUnavailableError(
+                f"LLM test call failed (provider={self.provider}, model={self.model}): {e}"
+            ) from e
+        if result is None:
+            raise LLMUnavailableError(f"Unsupported LLM provider '{self.provider}'")
+        logger.info("LLM preflight ok: provider=%s model=%s latency=%.2fs",
+                    self.provider, self.model, time.perf_counter() - start)
+
+    def generate_structured(self, prompt: str, response_schema: type[BaseModel],
+                            strict: bool = False) -> BaseModel:
         """
         Send *prompt* to the configured LLM and parse the response into an
         instance of *response_schema* (a Pydantic model).
 
         Falls back to the deterministic heuristic extractor when the client is
-        unavailable or the API call fails.
+        unavailable or the API call fails. With *strict* it raises
+        LLMUnavailableError instead of falling back.
         """
         if self.client is None:
+            if strict:
+                raise LLMUnavailableError(f"LLM not configured (provider={self.provider})")
             logger.warning("LLM unavailable (provider=%s), falling back to heuristic [schema=%s prompt_chars=%d]",
                            self.provider, response_schema.__name__, len(prompt))
             return self._heuristic_extractor(prompt, response_schema)
@@ -207,23 +248,20 @@ class LLMClient:
         logger.debug("LLM call start: provider=%s model=%s schema=%s prompt_chars=%d",
                      self.provider, self.model, response_schema.__name__, len(prompt))
         try:
-            if self.provider == "gemini":
-                result = self._generate_gemini(prompt, response_schema)
-            elif self.provider == "anthropic":
-                result = self._generate_anthropic(prompt, response_schema)
-            elif self.provider == "openai":
-                result = self._generate_openai(prompt, response_schema)
-            else:
-                result = None
+            result = self._call_provider(prompt, response_schema)
             if result is not None:
                 logger.info("LLM call ok: provider=%s model=%s prompt_chars=%d latency=%.2fs",
                             self.provider, self.model, len(prompt), time.perf_counter() - start)
                 return result
-        except Exception:
+        except Exception as e:
             logger.exception("LLM call failed: provider=%s model=%s prompt_chars=%d latency=%.2fs",
                              self.provider, self.model, len(prompt), time.perf_counter() - start)
+            if strict:
+                raise LLMUnavailableError(f"LLM call failed (provider={self.provider}): {e}") from e
             logger.warning("LLM unavailable, falling back to heuristic (provider=%s)", self.provider)
 
+        if strict:
+            raise LLMUnavailableError(f"LLM returned no result (provider={self.provider})")
         return self._heuristic_extractor(prompt, response_schema)
 
     # ──────────────────────────────────────────────────────────────────────────

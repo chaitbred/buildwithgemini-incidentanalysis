@@ -33,6 +33,7 @@ class MultiTechClassifierAgent:
         self,
         incident: RawIncident,
         classification_hint: str = "",
+        strict: bool = False,
     ) -> TechStackSignature:
         """
         Classify an incident into a TechStackSignature.
@@ -40,6 +41,9 @@ class MultiTechClassifierAgent:
         *classification_hint* is extra domain context from project settings,
         appended to the prompt when non-empty (e.g. 'This is a fintech platform.
         Prioritise PCI-DSS and payment-related failure modes.').
+
+        With *strict*, an unavailable LLM raises LLMUnavailableError instead of
+        using the heuristic extractor.
         """
         hint_section = (
             f"Project context: {classification_hint.strip()}"
@@ -57,7 +61,7 @@ class MultiTechClassifierAgent:
         )
         logger.debug("Classifying incident id=%s prompt_chars=%d hint=%s",
                      incident.incident_id, len(prompt), bool(hint_section))
-        sig = self.llm.generate_structured(prompt, TechStackSignature)
+        sig = self.llm.generate_structured(prompt, TechStackSignature, strict=strict)
         logger.debug("Classified incident id=%s primary=%s component=%s confidence=%s",
                      incident.incident_id, sig.primary_technology, sig.component, sig.confidence)
         return sig
