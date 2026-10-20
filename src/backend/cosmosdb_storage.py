@@ -28,6 +28,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.backend.base_storage import StorageBackend
+from src.logging_config import get_logger, log_timing
+
+logger = get_logger("storage.cosmosdb")
 
 _DATABASE = os.getenv("AZURE_COSMOS_DATABASE", "incident_analysis")
 _INCIDENTS_CONTAINER = os.getenv("AZURE_COSMOS_INCIDENTS_CONTAINER", "incidents")
@@ -88,6 +91,7 @@ class CosmosDBStorage(StorageBackend):
         self._incidents = db.get_container_client(_INCIDENTS_CONTAINER)
         self._taxonomy = db.get_container_client(_TAXONOMY_CONTAINER)
         self._projects = db.get_container_client(_PROJECTS_CONTAINER)
+        logger.info("CosmosDB storage ready database=%s auth=%s", _DATABASE, "key" if key else "managed-identity")
 
     # ------------------------------------------------------------------
     # Incident operations
@@ -104,6 +108,7 @@ class CosmosDBStorage(StorageBackend):
             raise ValueError("incident_id is required")
         doc["project_id"] = project_id
         self._incidents.upsert_item(doc)
+        logger.debug("save_incident id=%s project=%s", inc_id, project_id)
         return inc_id
 
     def get_incident(
@@ -114,7 +119,7 @@ class CosmosDBStorage(StorageBackend):
         try:
             return self._incidents.read_item(item=incident_id, partition_key=project_id)
         except Exception as e:
-            print(f"[CosmosDBStorage] get_incident failed: {e}")
+            logger.exception("get_incident failed")
             return None
 
     def query_incidents(
@@ -141,13 +146,15 @@ class CosmosDBStorage(StorageBackend):
             where = "WHERE " + " AND ".join(conditions)
             query = f"SELECT TOP {limit} * FROM c {where}"
 
-            return list(self._incidents.query_items(
+            results = list(self._incidents.query_items(
                 query=query,
                 parameters=params,
                 enable_cross_partition_query=True,
             ))
+            logger.debug("query_incidents project=%s limit=%d -> %d rows", project_id, limit, len(results))
+            return results
         except Exception as e:
-            print(f"[CosmosDBStorage] query_incidents failed: {e}")
+            logger.exception("query_incidents failed")
             return []
 
     # ------------------------------------------------------------------
@@ -178,7 +185,7 @@ class CosmosDBStorage(StorageBackend):
             doc = self._taxonomy.read_item(item=doc_id, partition_key=doc_id)
             return doc.get("tree")
         except Exception as e:
-            print(f"[CosmosDBStorage] get_taxonomy_tree failed: {e}")
+            logger.exception("get_taxonomy_tree failed")
             return None
 
     # ------------------------------------------------------------------
@@ -201,7 +208,7 @@ class CosmosDBStorage(StorageBackend):
             doc.pop("id", None)
             return doc
         except Exception as e:
-            print(f"[CosmosDBStorage] get_project failed: {e}")
+            logger.exception("get_project failed")
             return None
 
     def list_projects(self) -> List[Dict[str, Any]]:
@@ -212,9 +219,10 @@ class CosmosDBStorage(StorageBackend):
             ))
             for r in results:
                 r.pop("id", None)
+            logger.debug("list_projects -> %d", len(results))
             return results
         except Exception as e:
-            print(f"[CosmosDBStorage] list_projects failed: {e}")
+            logger.exception("list_projects failed")
             return []
 
     def delete_project(self, project_id: str) -> bool:
@@ -229,15 +237,16 @@ class CosmosDBStorage(StorageBackend):
                 parameters=[{"name": "@pid", "value": project_id}],
                 enable_cross_partition_query=True,
             ))
+            logger.info("delete_project project=%s deleting %d incidents", project_id, len(inc_docs))
             for doc in inc_docs:
                 self._incidents.delete_item(item=doc["id"], partition_key=project_id)
             try:
                 doc_id = f"{project_id}::taxonomy"
                 self._taxonomy.delete_item(item=doc_id, partition_key=doc_id)
             except Exception:
-                pass
+                logger.debug("taxonomy delete skipped project=%s", project_id, exc_info=True)
             self._projects.delete_item(item=project_id, partition_key=project_id)
             return True
         except Exception as e:
-            print(f"[CosmosDBStorage] delete_project failed: {e}")
+            logger.exception("delete_project failed")
             return False

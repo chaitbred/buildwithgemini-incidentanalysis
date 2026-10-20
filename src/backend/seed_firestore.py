@@ -13,6 +13,10 @@ import sys
 from datetime import datetime, timezone
 from google.cloud import firestore
 
+from src.logging_config import get_logger, log_timing
+
+logger = get_logger("storage.seed_firestore")
+
 # Hardcoded GCP Project ID strictly as requested
 FIRESTORE_PROJECT_ID = "qwiklabs-gcp-04-7df709bbadfe"
 COLLECTION_NAME = "incidents"
@@ -106,7 +110,7 @@ SEEDED_INCIDENTS = [
 ]
 
 def seed_firestore():
-    print(f"Connecting to Firestore with hardcoded project: '{FIRESTORE_PROJECT_ID}'...")
+    logger.info("Connecting to Firestore project '%s'", FIRESTORE_PROJECT_ID)
     db = firestore.Client(project=FIRESTORE_PROJECT_ID)
     batch = db.batch()
 
@@ -114,8 +118,9 @@ def seed_firestore():
         doc_ref = db.collection(COLLECTION_NAME).document(inc["incident_id"])
         batch.set(doc_ref, inc, merge=True)
 
-    batch.commit()
-    print(f"Successfully seeded {len(SEEDED_INCIDENTS)} incidents into Firestore collection '{COLLECTION_NAME}'.")
+    with log_timing(logger, "seed batch commit", incidents=len(SEEDED_INCIDENTS), collection=COLLECTION_NAME):
+        batch.commit()
+    logger.info("Successfully seeded %d incidents into Firestore collection '%s'", len(SEEDED_INCIDENTS), COLLECTION_NAME)
 
 if __name__ == "__main__":
     seed_firestore()

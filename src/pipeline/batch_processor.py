@@ -1,12 +1,16 @@
 import json
 import os
 import re
+import time
 import uuid
 from typing import List, Dict, Any, Generator, Optional
 import pandas as pd
 from src.models.incident import RawIncident, EnrichedIncident
 from src.agents.classifier_agent import MultiTechClassifierAgent
 from src.agents.taxonomy_agent import DynamicTaxonomyAgent
+from src.logging_config import get_logger, log_timing, log_progress
+
+logger = get_logger("pipeline.batch")
 
 
 def _norm(s: str) -> str:
@@ -83,9 +87,11 @@ class IncidentBatchProcessor:
         Supports CSV (.csv) and Excel (.xlsx, .xls).
         """
         if not os.path.exists(filepath):
+            logger.error("Input file not found: %s", filepath)
             raise FileNotFoundError(f"File not found: {filepath}")
 
         ext = os.path.splitext(filepath)[1].lower()
+        logger.info("Parsing file=%s format=%s chunksize=%d", os.path.basename(filepath), ext or "csv", chunksize)
 
         if ext in [".xlsx", ".xls"]:
             import openpyxl
@@ -104,10 +110,12 @@ class IncidentBatchProcessor:
                 except StopIteration:
                     pass
             sheet = best_sheet
+            logger.info("Excel sheet selected: %s (%d header columns)", getattr(sheet, "title", "?"), best_col_count)
             rows_iter = sheet.iter_rows(values_only=True)
             try:
                 header_row = next(rows_iter)
             except StopIteration:
+                logger.warning("Excel sheet has no rows: %s", filepath)
                 return
 
             headers = [str(h).strip() if h is not None else f"col_{i}" for i, h in enumerate(header_row)]
@@ -146,13 +154,44 @@ class IncidentBatchProcessor:
     ) -> List[EnrichedIncident]:
         all_enriched: List[EnrichedIncident] = []
         total_seen = 0
+        failures = 0
+        batch_start = time.perf_counter()
+        t_parse = t_classify = t_taxonomy = 0.0
+        logger.info(
+            "Batch start file=%s max_incidents=%d hint=%s output=%s",
+            os.path.basename(filepath), max_incidents, bool(self.classification_hint),
+            self.output_enriched_path,
+        )
 
-        for chunk in self.iter_file_records(filepath):
+        chunk_iter = iter(self.iter_file_records(filepath))
+        chunk_no = 0
+        while True:
+            t0 = time.perf_counter()
+            try:
+                chunk = next(chunk_iter)
+            except StopIteration:
+                break
+            except Exception:
+                logger.exception("Parsing failed file=%s after %d incidents", filepath, total_seen)
+                raise
+            t_parse += time.perf_counter() - t0
+            chunk_no += 1
+            logger.debug("Chunk %d parsed: %d incidents", chunk_no, len(chunk))
+
             for inc in chunk:
-                sig = self.classifier.classify_incident(
-                    inc, classification_hint=self.classification_hint
-                )
-                path = self.taxonomy_agent.evolve_taxonomy(inc, sig)
+                try:
+                    t0 = time.perf_counter()
+                    sig = self.classifier.classify_incident(
+                        inc, classification_hint=self.classification_hint
+                    )
+                    t1 = time.perf_counter()
+                    path = self.taxonomy_agent.evolve_taxonomy(inc, sig)
+                    t_classify += t1 - t0
+                    t_taxonomy += time.perf_counter() - t1
+                except Exception:
+                    failures += 1
+                    logger.exception("Incident processing failed id=%s", inc.incident_id)
+                    raise
                 enriched = EnrichedIncident(
                     incident=inc,
                     classification=sig,
@@ -162,28 +201,45 @@ class IncidentBatchProcessor:
                 total_seen += 1
                 if progress_cb and total_seen % 50 == 0:
                     progress_cb(total_seen)
+                log_progress(logger, "Batch", total_seen, max_incidents, every=100, started=batch_start)
 
                 if total_seen >= max_incidents:
                     break
             if total_seen >= max_incidents:
+                logger.info("Reached max_incidents=%d, stopping early", max_incidents)
                 break
 
-        self.taxonomy_agent.save()
+        logger.info(
+            "Stage timings parse=%.2fs classify=%.2fs taxonomy=%.2fs (incidents=%d chunks=%d)",
+            t_parse, t_classify, t_taxonomy, total_seen, chunk_no,
+        )
+
+        with log_timing(logger, "taxonomy save"):
+            self.taxonomy_agent.save()
 
         # Merge with existing enriched file if present
-        existing = []
-        if os.path.exists(self.output_enriched_path):
-            try:
-                with open(self.output_enriched_path, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-            except Exception:
-                existing = []
+        with log_timing(logger, "persist enriched incidents", path=self.output_enriched_path, new=len(all_enriched)):
+            existing = []
+            if os.path.exists(self.output_enriched_path):
+                try:
+                    with open(self.output_enriched_path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                except Exception:
+                    logger.warning(
+                        "Existing enriched file unreadable, starting fresh: %s",
+                        self.output_enriched_path, exc_info=True,
+                    )
+                    existing = []
 
-        combined = existing + [item.model_dump() for item in all_enriched]
-        os.makedirs(os.path.dirname(self.output_enriched_path), exist_ok=True)
-        with open(self.output_enriched_path, "w", encoding="utf-8") as f:
-            json.dump(combined, f, indent=2)
+            combined = existing + [item.model_dump() for item in all_enriched]
+            os.makedirs(os.path.dirname(self.output_enriched_path), exist_ok=True)
+            with open(self.output_enriched_path, "w", encoding="utf-8") as f:
+                json.dump(combined, f, indent=2)
 
+        logger.info(
+            "Batch complete processed=%d failed=%d existing=%d total_persisted=%d in %.2fs",
+            total_seen, failures, len(existing), len(combined), time.perf_counter() - batch_start,
+        )
         return all_enriched
 
     def process_csv(self, csv_filepath: str) -> List[EnrichedIncident]:

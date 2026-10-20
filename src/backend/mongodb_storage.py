@@ -26,6 +26,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.backend.base_storage import StorageBackend
+from src.logging_config import get_logger
+
+logger = get_logger("storage.mongodb")
 
 _DATABASE = os.getenv("MONGODB_DATABASE", "incident_analysis")
 _INCIDENTS_COL = os.getenv("MONGODB_INCIDENTS_COLLECTION", "incidents")
@@ -78,6 +81,7 @@ class MongoDBStorage(StorageBackend):
         self._incidents = db[_INCIDENTS_COL]
         self._taxonomy = db[_TAXONOMY_COL]
         self._projects = db[_PROJECTS_COL]
+        logger.info("MongoDB storage ready database=%s", _DATABASE)
 
     def _incident_id(self, project_id: str, incident_id: str) -> str:
         return f"{project_id}::{incident_id}"
@@ -98,6 +102,7 @@ class MongoDBStorage(StorageBackend):
         doc["project_id"] = project_id
         doc["_id"] = self._incident_id(project_id, inc_id)
         self._incidents.replace_one({"_id": doc["_id"]}, doc, upsert=True)
+        logger.debug("save_incident id=%s project=%s", inc_id, project_id)
         return inc_id
 
     def get_incident(
@@ -112,8 +117,8 @@ class MongoDBStorage(StorageBackend):
             if doc:
                 doc.pop("_id", None)
             return doc
-        except Exception as e:
-            print(f"[MongoDBStorage] get_incident failed: {e}")
+        except Exception:
+            logger.exception("get_incident failed")
             return None
 
     def query_incidents(
@@ -133,9 +138,11 @@ class MongoDBStorage(StorageBackend):
             if failure_mechanism:
                 query["failure_mechanism"] = failure_mechanism
             cursor = self._incidents.find(query, {"_id": 0}).limit(limit)
-            return list(cursor)
-        except Exception as e:
-            print(f"[MongoDBStorage] query_incidents failed: {e}")
+            rows = list(cursor)
+            logger.debug("query_incidents project=%s limit=%d -> %d rows", project_id, limit, len(rows))
+            return rows
+        except Exception:
+            logger.exception("query_incidents failed")
             return []
 
     # ------------------------------------------------------------------
@@ -167,8 +174,8 @@ class MongoDBStorage(StorageBackend):
         try:
             doc = self._taxonomy.find_one({"_id": f"{project_id}::taxonomy"})
             return doc.get("tree") if doc else None
-        except Exception as e:
-            print(f"[MongoDBStorage] get_taxonomy_tree failed: {e}")
+        except Exception:
+            logger.exception("get_taxonomy_tree failed")
             return None
 
     # ------------------------------------------------------------------
@@ -191,16 +198,17 @@ class MongoDBStorage(StorageBackend):
             if doc:
                 doc.pop("_id", None)
             return doc
-        except Exception as e:
-            print(f"[MongoDBStorage] get_project failed: {e}")
+        except Exception:
+            logger.exception("get_project failed")
             return None
 
     def list_projects(self) -> List[Dict[str, Any]]:
         try:
             docs = list(self._projects.find({}, {"_id": 0}).sort("created_at", 1))
+            logger.debug("list_projects -> %d", len(docs))
             return docs
-        except Exception as e:
-            print(f"[MongoDBStorage] list_projects failed: {e}")
+        except Exception:
+            logger.exception("list_projects failed")
             return []
 
     def delete_project(self, project_id: str) -> bool:
@@ -213,6 +221,6 @@ class MongoDBStorage(StorageBackend):
             self._incidents.delete_many({"project_id": project_id})
             self._taxonomy.delete_one({"_id": f"{project_id}::taxonomy"})
             return True
-        except Exception as e:
-            print(f"[MongoDBStorage] delete_project failed: {e}")
+        except Exception:
+            logger.exception("delete_project failed")
             return False

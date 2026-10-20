@@ -1,5 +1,8 @@
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
+from src.logging_config import get_logger
+
+logger = get_logger("pipeline.taxonomy_model")
 
 class TaxonomyNode(BaseModel):
     node_id: str
@@ -101,6 +104,7 @@ class DynamicTaxonomyTree(BaseModel):
 
             recurse(ontology_def, "root", 0)
 
+        logger.debug("Imported custom ontology: %d nodes created/updated, tree size=%d", added_count, len(self.nodes))
         return added_count
 
     def register_incident(self, path_tuples: List[tuple[str, str]], incident_id: str) -> List[str]:

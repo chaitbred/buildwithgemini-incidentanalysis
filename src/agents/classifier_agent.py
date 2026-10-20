@@ -1,6 +1,9 @@
 from typing import Optional
 from src.models.incident import RawIncident, TechStackSignature
 from src.agents.base_llm import LLMClient
+from src.logging_config import get_logger
+
+logger = get_logger("pipeline.classifier")
 
 # Hard caps prevent runaway token usage on verbose incident descriptions.
 # P99 useful signal fits within these bounds; excess text is noise.
@@ -23,6 +26,8 @@ failure_mechanism, root_cause_domain, resolution_pattern, confidence (0-1), summ
 class MultiTechClassifierAgent:
     def __init__(self, llm_client: Optional[LLMClient] = None):
         self.llm = llm_client or LLMClient()
+        if not self.llm.is_live():
+            logger.warning("Classifier initialised without a live LLM; incidents will use heuristic classification")
 
     def classify_incident(
         self,
@@ -50,4 +55,9 @@ class MultiTechClassifierAgent:
             resolution=res,
             hint_section=hint_section,
         )
-        return self.llm.generate_structured(prompt, TechStackSignature)
+        logger.debug("Classifying incident id=%s prompt_chars=%d hint=%s",
+                     incident.incident_id, len(prompt), bool(hint_section))
+        sig = self.llm.generate_structured(prompt, TechStackSignature)
+        logger.debug("Classified incident id=%s primary=%s component=%s confidence=%s",
+                     incident.incident_id, sig.primary_technology, sig.component, sig.confidence)
+        return sig

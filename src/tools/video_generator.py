@@ -6,17 +6,18 @@ and uploads raw bytes to Google Cloud Storage public bucket, returning the publi
 """
 
 import os
+import time
 import uuid
 import base64
-import logging
 from typing import Optional, Dict, Any
 
 from google import genai
 from google.genai import types as genai_types
 from google.cloud import storage
 from google.adk.tools import ToolContext
+from src.logging_config import get_logger
 
-logger = logging.getLogger("video_generator")
+logger = get_logger("tools.video")
 
 GCS_BUCKET_NAME = "bwg3-qwiklabs-gcp-04-7df709bbadfe"
 PROJECT_ID = "qwiklabs-gcp-04-7df709bbadfe"
@@ -119,7 +120,8 @@ async def generate_incident_diagnostic_video(
         A JSON string containing the public Cloud Storage HTTPS URL, artifact filename, and status.
     """
     try:
-        logger.info(f"Generating incident diagnostic video with prompt: '{prompt}'")
+        started = time.perf_counter()
+        logger.info("Generating video model=%s aspect_ratio=%s prompt_chars=%d", OMNI_MODEL_NAME, aspect_ratio, len(prompt))
         client = genai.Client(
             vertexai=True,
             project=PROJECT_ID,
@@ -139,6 +141,7 @@ async def generate_incident_diagnostic_video(
             timeout=180.0
         )
 
+        logger.info("Video interaction returned in %.2fs", time.perf_counter() - started)
         video_bytes = _extract_video_bytes(interaction)
         if not video_bytes:
             raise ValueError(f"No video bytes returned by {OMNI_MODEL_NAME} interaction.")
@@ -151,7 +154,7 @@ async def generate_incident_diagnostic_video(
             artifact=artifact_part,
             custom_metadata={"prompt": prompt, "model": OMNI_MODEL_NAME}
         )
-        logger.info(f"Saved artifact to tool_context: {filename}")
+        logger.info("Saved artifact to tool_context: %s", filename)
 
         # 2. Upload video bytes to public Cloud Storage bucket
         storage_client = storage.Client()
@@ -160,7 +163,7 @@ async def generate_incident_diagnostic_video(
         blob.upload_from_string(video_bytes, content_type="video/mp4")
 
         public_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/videos/{filename}"
-        logger.info(f"Uploaded video to Cloud Storage: {public_url}")
+        logger.info("Uploaded video to Cloud Storage: %s (%d bytes, total %.2fs)", public_url, len(video_bytes), time.perf_counter() - started)
 
         import json
         return json.dumps({

@@ -27,6 +27,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.backend.base_storage import StorageBackend
+from src.logging_config import get_logger
+
+logger = get_logger("storage.local")
 
 _ROOT = os.getenv("LOCAL_STORAGE_DIR", "data")
 
@@ -95,6 +98,7 @@ def _load_incidents(project_id: str) -> Dict[str, Dict[str, Any]]:
             return {r["incident_id"]: r for r in records if "incident_id" in r}
         return records
     except Exception:
+        logger.exception("Failed to read incidents file %s", path)
         return {}
 
 
@@ -113,6 +117,7 @@ def _load_meta(project_id: str) -> Optional[Dict[str, Any]]:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
+        logger.exception("Failed to read project meta %s", path)
         return None
 
 
@@ -155,6 +160,7 @@ class LocalStorage(StorageBackend):
 
     def __init__(self) -> None:
         _ensure_default_project()
+        logger.info("Local storage ready root=%s", _ROOT)
 
     # ------------------------------------------------------------------
     # Incident operations
@@ -172,6 +178,7 @@ class LocalStorage(StorageBackend):
         store = _load_incidents(project_id)
         store[inc_id] = doc
         _save_incidents(store, project_id)
+        logger.debug("save_incident id=%s project=%s total=%d", inc_id, project_id, len(store))
         return inc_id
 
     def get_incident(
@@ -179,7 +186,9 @@ class LocalStorage(StorageBackend):
         incident_id: str,
         project_id: str = "default",
     ) -> Optional[Dict[str, Any]]:
-        return _load_incidents(project_id).get(incident_id)
+        doc = _load_incidents(project_id).get(incident_id)
+        logger.debug("get_incident id=%s project=%s found=%s", incident_id, project_id, doc is not None)
+        return doc
 
     def query_incidents(
         self,
@@ -200,6 +209,7 @@ class LocalStorage(StorageBackend):
             results.append(doc)
             if len(results) >= limit:
                 break
+        logger.debug("query_incidents project=%s limit=%d -> %d rows", project_id, limit, len(results))
         return results
 
     # ------------------------------------------------------------------
@@ -234,8 +244,8 @@ class LocalStorage(StorageBackend):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f).get("tree")
-        except Exception as e:
-            print(f"[LocalStorage] get_taxonomy_tree failed: {e}")
+        except Exception:
+            logger.exception("get_taxonomy_tree failed")
             return None
 
     # ------------------------------------------------------------------
@@ -265,8 +275,8 @@ class LocalStorage(StorageBackend):
                     meta = _load_meta(entry.name)
                     if meta:
                         results.append(meta)
-        except Exception as e:
-            print(f"[LocalStorage] list_projects failed: {e}")
+        except Exception:
+            logger.exception("list_projects failed")
         results.sort(key=lambda p: p.get("created_at", ""))
         return results
 
@@ -277,4 +287,5 @@ class LocalStorage(StorageBackend):
         if not os.path.exists(pdir):
             return False
         shutil.rmtree(pdir, ignore_errors=True)
+        logger.info("delete_project project=%s removed", project_id)
         return True

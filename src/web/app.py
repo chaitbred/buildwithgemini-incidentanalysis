@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 import json
 import re
 import shutil
@@ -6,6 +8,14 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
+load_dotenv()
+
+# Configure logging before the heavy imports so their init messages are captured
+from src.logging_config import setup_logging, get_logger, log_timing
+setup_logging()
+logger = get_logger("web.app")
 
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,6 +27,29 @@ from src.agents.taxonomy_agent import DynamicTaxonomyAgent
 from src.pipeline.batch_processor import IncidentBatchProcessor
 
 app = FastAPI(title="Autonomous Incident Classifier & Dynamic Taxonomy Miner")
+
+
+@app.middleware("http")
+async def _log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("%s %s -> unhandled error after %.0fms",
+                         request.method, request.url.path, (time.perf_counter() - start) * 1000)
+        raise
+    ms = (time.perf_counter() - start) * 1000
+    level = logging.WARNING if response.status_code >= 400 else logging.INFO
+    # path only (no query string/body) to avoid leaking secrets
+    logger.log(level, "%s %s -> %d (%.0fms)", request.method, request.url.path, response.status_code, ms)
+    return response
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception on %s %s", request.method, request.url.path,
+                 exc_info=(type(exc), exc, exc.__traceback__))
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 DATA_DIR = os.path.abspath("data")
 # Legacy paths kept for backward-compat reads of the "default" project
@@ -235,8 +268,11 @@ async def create_project(request: Request):
             agent = _get_taxonomy_agent(project_id)
             agent.import_custom_ontology(seed)
         except Exception as e:
-            print(f"[app] Failed to seed taxonomy for project {project_id}: {e}")
+            logger.warning("Failed to seed taxonomy for project %s: %s", project_id, e, exc_info=True)
+        else:
+            logger.info("Seeded taxonomy for project %s (nodes=%d)", project_id, len(agent.tree.nodes))
 
+    logger.info("Project created id=%s name=%r", project_id, project_data["name"])
     return JSONResponse(content=project_data, status_code=201)
 
 
@@ -288,6 +324,7 @@ def delete_project(project_id: str):
     pdir = _project_dir(project_id)
     shutil.rmtree(pdir, ignore_errors=True)
     _taxonomy_agents.pop(project_id, None)
+    logger.info("Project deleted id=%s", project_id)
     return JSONResponse(content={"status": "deleted", "project_id": project_id})
 
 
@@ -320,6 +357,7 @@ async def add_custom_ontology(request: Request, project_id: str = Query(default=
             "project_id": project_id,
         })
     except Exception as e:
+        logger.warning("Custom ontology import failed project=%s: %s", project_id, e, exc_info=True)
         raise HTTPException(status_code=400, detail=f"Failed to import ontology: {str(e)}")
 
 
@@ -381,10 +419,11 @@ def classify_single(
         resolution=resolution,
         severity=severity,
     )
-    sig = _classifier.classify_incident(raw, classification_hint=hint)
-    agent = _get_taxonomy_agent(project_id)
-    path = agent.evolve_taxonomy(raw, sig)
-    agent.save()
+    with log_timing(logger, "classify_single", project=project_id, incident=inc_id):
+        sig = _classifier.classify_incident(raw, classification_hint=hint)
+        agent = _get_taxonomy_agent(project_id)
+        path = agent.evolve_taxonomy(raw, sig)
+        agent.save()
 
     enriched = EnrichedIncident(incident=raw, classification=sig, taxonomy_path=path)
     _append_enriched(project_id, enriched.model_dump())
@@ -422,7 +461,12 @@ async def upload_file(
         tmp_path = tmp.name
 
     try:
-        results = processor.process_file_stream(tmp_path)
+        size = os.path.getsize(tmp_path)
+        logger.info("Upload received file=%r size=%d bytes project=%s", filename, size, project_id)
+        with log_timing(logger, "analysis (upload)", project=project_id, file=filename):
+            results = processor.process_file_stream(tmp_path)
+        logger.info("Analysis complete project=%s file=%r processed=%d taxonomy_nodes=%d",
+                    project_id, filename, len(results), len(agent.tree.nodes))
         return JSONResponse(content={
             "status": "success",
             "filename": filename,
@@ -439,6 +483,7 @@ async def upload_file(
 def run_batch(project_id: str = Query(default="default")):
     sample_csv = os.path.join(DATA_DIR, "sample_incidents.csv")
     if not os.path.exists(sample_csv):
+        logger.warning("run_batch: sample_incidents.csv not found at %s", sample_csv)
         return JSONResponse(status_code=404, content={"error": "sample_incidents.csv not found"})
 
     settings = _get_project_settings(project_id)
@@ -451,7 +496,9 @@ def run_batch(project_id: str = Query(default="default")):
         output_enriched_path=_enriched_path(project_id),
         classification_hint=hint,
     )
-    results = processor.process_csv(sample_csv)
+    with log_timing(logger, "analysis (sample batch)", project=project_id):
+        results = processor.process_csv(sample_csv)
+    logger.info("Sample batch complete project=%s processed=%d", project_id, len(results))
     return JSONResponse(content={
         "status": "success",
         "processed_count": len(results),

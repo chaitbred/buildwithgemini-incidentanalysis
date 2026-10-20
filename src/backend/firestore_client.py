@@ -15,6 +15,9 @@ import os
 from typing import Any, Dict, List, Optional
 
 from src.backend.storage_factory import get_storage
+from src.logging_config import get_logger
+
+logger = get_logger("storage.firestore_client")
 
 FIRESTORE_PROJECT_ID = os.getenv(
     "FIRESTORE_PROJECT_ID",
@@ -35,8 +38,8 @@ def get_incident_from_firestore(
 ) -> Optional[Dict[str, Any]]:
     try:
         return get_storage().get_incident(incident_id, project_id=project_id)
-    except Exception as e:
-        print(f"[firestore_client] get_incident_from_firestore failed: {e}")
+    except Exception:
+        logger.exception("get_incident_from_firestore failed")
         return None
 
 
