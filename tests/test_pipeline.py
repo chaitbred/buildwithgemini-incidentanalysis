@@ -66,7 +66,8 @@ class TestIncidentPipeline(unittest.TestCase):
         processor = IncidentBatchProcessor(
             classifier=classifier,
             taxonomy_agent=taxonomy_agent,
-            output_enriched_path=self.test_enriched_path
+            output_enriched_path=self.test_enriched_path,
+            require_llm=False,
         )
         results = processor.process_csv("data/sample_incidents.csv")
         self.assertGreaterEqual(len(results), 10)
@@ -92,11 +93,37 @@ class TestIncidentPipeline(unittest.TestCase):
         processor = IncidentBatchProcessor(
             classifier=classifier,
             taxonomy_agent=taxonomy_agent,
-            output_enriched_path=self.test_enriched_path
+            output_enriched_path=self.test_enriched_path,
+            require_llm=False,
         )
         results = processor.process_file_stream("data/sample_incidents.xlsx")
         self.assertEqual(len(results), 3)
         self.assertTrue(any(r.incident.title.startswith("ClickHouse") for r in results))
+
+    def test_stops_when_llm_unavailable(self):
+        from src.agents.base_llm import LLMClient, LLMUnavailableError
+        llm = LLMClient()
+        llm.client = None  # simulate missing key/credentials
+        processor = IncidentBatchProcessor(
+            classifier=MultiTechClassifierAgent(llm),
+            taxonomy_agent=DynamicTaxonomyAgent(storage_path=self.test_taxonomy_path),
+            output_enriched_path=self.test_enriched_path,
+        )
+        with self.assertRaises(LLMUnavailableError):
+            processor.process_file_stream("data/sample_incidents.xlsx")
+        self.assertFalse(os.path.exists(self.test_enriched_path))
+
+    def test_row_count_and_batch_plan(self):
+        processor = IncidentBatchProcessor(
+            classifier=MultiTechClassifierAgent(),
+            taxonomy_agent=DynamicTaxonomyAgent(storage_path=self.test_taxonomy_path),
+            output_enriched_path=self.test_enriched_path,
+        )
+        self.assertEqual(processor.count_rows("data/sample_incidents.xlsx"), 3)
+        batch_size, workers = processor.plan_batches(1000)
+        self.assertEqual(batch_size, 50)
+        self.assertGreaterEqual(workers, 1)
+        self.assertEqual(processor.plan_batches(3)[1], 3)
 
     def test_runbook_service_search(self):
         matches = search_runbooks("Kubernetes", "OOMKilled")
