@@ -22,6 +22,9 @@ from src.backend.firestore_client import (
 from src.tools.runbook_service import search_runbooks
 from src.tools.postmortem_generator import create_postmortem_report
 from src.tools.external_status import check_external_service_status
+from src.logging_config import get_logger
+
+logger = get_logger("tools.agent")
 
 classifier = MultiTechClassifierAgent()
 tax_agent = DynamicTaxonomyAgent(storage_path="/config/Desktop/IncidentAnalysis/data/dynamic_taxonomy.json")
@@ -65,6 +68,7 @@ def generate_postmortem_markdown_report(incident_id: str) -> str:
             "report_preview": result["markdown_content"][:600] + "\n...[Report continues]"
         }, indent=2)
     except Exception as e:
+        logger.exception("Postmortem tool failed incident_id=%s", incident_id)
         return f"Error generating post-mortem report: {str(e)}"
 
 def classify_and_record_incident(title: str, description: str, resolution: str = "", severity: str = "SEV-2") -> str:
@@ -79,6 +83,7 @@ def classify_and_record_incident(title: str, description: str, resolution: str =
         resolution=resolution,
         severity=severity
     )
+    logger.info("classify_and_record_incident id=%s severity=%s", raw.incident_id, severity)
     sig = classifier.classify_incident(raw)
     path = tax_agent.evolve_taxonomy(raw, sig)
     tax_agent.save()
@@ -105,6 +110,7 @@ def classify_and_record_incident(title: str, description: str, resolution: str =
         save_taxonomy_tree_to_firestore(tax_agent.tree.to_hierarchical_dict())
         payload["firestore_persisted"] = True
     except Exception as e:
+        logger.warning("Firestore persistence failed for %s: %s", raw.incident_id, e, exc_info=True)
         payload["firestore_persisted"] = False
         payload["firestore_error"] = str(e)
 
@@ -120,6 +126,7 @@ def read_incident_from_firestore(incident_id: str) -> str:
             return f"Incident '{incident_id}' not found in Firestore."
         return json.dumps(doc, indent=2)
     except Exception as e:
+        logger.warning("Firestore read failed incident_id=%s: %s", incident_id, e, exc_info=True)
         return f"Error querying Firestore: {str(e)}"
 
 def query_firestore_incidents(technology: Optional[str] = None, domain: Optional[str] = None, failure_mechanism: Optional[str] = None, limit: int = 10) -> str:
@@ -138,6 +145,7 @@ def query_firestore_incidents(technology: Optional[str] = None, domain: Optional
             "incidents": docs
         }, indent=2)
     except Exception as e:
+        logger.warning("Firestore query failed: %s", e, exc_info=True)
         return f"Error filtering Firestore incidents: {str(e)}"
 
 def add_custom_ontology(ontology_json_str: str) -> str:
@@ -148,6 +156,7 @@ def add_custom_ontology(ontology_json_str: str) -> str:
         save_taxonomy_tree_to_firestore(tax_agent.tree.to_hierarchical_dict())
         return f"Successfully imported custom ontology ({added} nodes created/updated). Total tree nodes: {len(tax_agent.tree.nodes)}"
     except Exception as e:
+        logger.exception("Custom ontology import failed")
         return f"Error importing custom ontology: {str(e)}"
 
 def view_taxonomy_tree() -> str:
@@ -175,7 +184,7 @@ def get_analytics_summary() -> str:
                 "by_failure_mechanism": failures
             }, indent=2)
     except Exception:
-        pass
+        logger.warning("Firestore analytics query failed; falling back to local store", exc_info=True)
 
     enriched_path = "/config/Desktop/IncidentAnalysis/data/enriched_incidents.json"
     if not os.path.exists(enriched_path):

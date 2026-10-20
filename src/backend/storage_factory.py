@@ -18,6 +18,9 @@ import os
 from functools import lru_cache
 
 from src.backend.base_storage import StorageBackend
+from src.logging_config import get_logger, log_timing
+
+logger = get_logger("storage.factory")
 
 _BACKEND = os.getenv("STORAGE_BACKEND", "local").lower()
 
@@ -30,6 +33,19 @@ def get_storage() -> StorageBackend:
     The instance is cached after the first call so the SDK client is
     initialised only once per process.
     """
+    source = "STORAGE_BACKEND env" if "STORAGE_BACKEND" in os.environ else "default (STORAGE_BACKEND unset)"
+    logger.info("Selecting storage backend '%s' (source: %s)", _BACKEND, source)
+    try:
+        with log_timing(logger, "init storage backend", backend=_BACKEND):
+            return _create_backend()
+    except ValueError:
+        raise
+    except Exception:
+        logger.error("Storage backend '%s' failed to initialise (no fallback; error propagated)", _BACKEND)
+        raise
+
+
+def _create_backend() -> StorageBackend:
     if _BACKEND == "firestore":
         from src.backend.firestore_storage import FirestoreStorage
         return FirestoreStorage()
@@ -50,6 +66,7 @@ def get_storage() -> StorageBackend:
         from src.backend.local_storage import LocalStorage
         return LocalStorage()
 
+    logger.error("Unknown STORAGE_BACKEND='%s'", _BACKEND)
     raise ValueError(
         f"Unknown STORAGE_BACKEND='{_BACKEND}'. "
         "Supported values: local | firestore | dynamodb | cosmosdb | mongodb"

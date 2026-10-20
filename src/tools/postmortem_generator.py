@@ -3,6 +3,9 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from src.backend.firestore_client import get_incident_from_firestore
+from src.logging_config import get_logger
+
+logger = get_logger("tools.postmortem")
 
 REPORTS_DIR = os.path.abspath("reports")
 
@@ -80,6 +83,7 @@ def create_postmortem_report(incident_id: str, output_dir: Optional[str] = None)
     """
     Fetches incident from Firestore (or local dataset fallback) and writes the post-mortem report to reports/.
     """
+    logger.info("Generating postmortem incident_id=%s", incident_id)
     out_dir = output_dir or REPORTS_DIR
     os.makedirs(out_dir, exist_ok=True)
 
@@ -87,6 +91,7 @@ def create_postmortem_report(incident_id: str, output_dir: Optional[str] = None)
 
     # Fallback to local enriched incidents if not yet in Firestore
     if not incident_data:
+        logger.info("Incident %s not in Firestore, trying local enriched data", incident_id)
         local_path = os.path.abspath("data/enriched_incidents.json")
         if os.path.exists(local_path):
             with open(local_path, "r") as f:
@@ -113,6 +118,7 @@ def create_postmortem_report(incident_id: str, output_dir: Optional[str] = None)
                         break
 
     if not incident_data:
+        logger.error("Postmortem failed: incident %s not found in Firestore or local data", incident_id)
         raise ValueError(f"Incident with ID '{incident_id}' could not be found in Firestore or local data.")
 
     report_markdown = generate_postmortem_markdown(incident_data)
@@ -122,6 +128,7 @@ def create_postmortem_report(incident_id: str, output_dir: Optional[str] = None)
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(report_markdown)
 
+    logger.info("Postmortem written incident_id=%s path=%s chars=%d", incident_id, filepath, len(report_markdown))
     return {
         "status": "success",
         "incident_id": incident_id,

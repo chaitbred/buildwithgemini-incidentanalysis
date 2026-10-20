@@ -1,7 +1,12 @@
 import os
 import json
+import time
 from typing import Optional
 from pydantic import BaseModel
+
+from src.logging_config import get_logger
+
+logger = get_logger("llm.base")
 
 # =============================================================================
 # LLM Provider Configuration
@@ -82,7 +87,13 @@ class LLMClient:
         self.provider = os.getenv("LLM_PROVIDER", "gemini").lower()
         self.model = os.getenv("LLM_MODEL", _PROVIDER_DEFAULTS.get(self.provider, "gemini-2.5-flash"))
         self.client = None
+        logger.info("LLM provider selected: provider=%s model=%s", self.provider, self.model)
         self._init_provider(api_key)
+        if self.client is None:
+            logger.error("LLM NOT AVAILABLE: provider=%s model=%s - all calls will use the heuristic extractor",
+                         self.provider, self.model)
+        else:
+            logger.info("LLM client ready: provider=%s model=%s", self.provider, self.model)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Provider initialisation
@@ -96,15 +107,15 @@ class LLMClient:
         elif self.provider == "openai":
             self._init_openai(api_key)
         else:
-            print(f"[LLMClient] Unknown LLM_PROVIDER='{self.provider}'. "
-                  "Supported: gemini | anthropic | openai. Falling back to heuristics.")
+            logger.error("Unknown LLM_PROVIDER='%s'. Supported: gemini | anthropic | openai. "
+                         "Falling back to heuristics.", self.provider)
 
     def _init_gemini(self, api_key: Optional[str]) -> None:
         try:
             from google import genai
             from google.genai.types import HttpOptions
         except ImportError:
-            print("[LLMClient] google-genai not installed. Run: pip install google-genai")
+            logger.error("google-genai package not installed. Run: pip install google-genai")
             return
 
         # Vertex AI mode: used for corporate proxies (e.g. Accenture frictionless)
@@ -114,48 +125,51 @@ class LLMClient:
             location = os.getenv("GEMINI_LOCATION", "global")
             base_url = os.getenv("GEMINI_BASE_URL", "")
             if not project:
-                print("[LLMClient] GEMINI_VERTEX=true but GEMINI_PROJECT is not set. "
-                      "Running in heuristic-only mode.")
+                logger.error("GEMINI_VERTEX=true but GEMINI_PROJECT is not set. "
+                             "Running in heuristic-only mode.")
                 return
             try:
                 kwargs = dict(vertexai=True, project=project, location=location)
                 if base_url:
                     kwargs["http_options"] = HttpOptions(base_url=base_url)
                 self.client = genai.Client(**kwargs)
-            except Exception as e:
-                print(f"[LLMClient] Could not initialise Vertex AI Gemini client: {e}")
+                logger.info("Gemini Vertex client initialised: project=%s location=%s base_url=%s",
+                            project, location, base_url or "(default)")
+            except Exception:
+                logger.exception("Could not initialise Vertex AI Gemini client (project=%s location=%s)",
+                                 project, location)
             return
 
         # Standard API key mode (Google AI Studio)
         key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not key:
-            print("[LLMClient] No Gemini API key found (GEMINI_API_KEY / GOOGLE_API_KEY). "
-                  "Running in heuristic-only mode.")
+            logger.error("No Gemini API key found (GEMINI_API_KEY / GOOGLE_API_KEY). "
+                         "Running in heuristic-only mode.")
             return
         try:
             self.client = genai.Client(api_key=key)
-        except Exception as e:
-            print(f"[LLMClient] Could not initialise Gemini client: {e}")
+        except Exception:
+            logger.exception("Could not initialise Gemini client")
 
     def _init_anthropic(self, api_key: Optional[str]) -> None:
         key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not key:
-            print("[LLMClient] No Anthropic API key found (ANTHROPIC_API_KEY). "
-                  "Running in heuristic-only mode.")
+            logger.error("No Anthropic API key found (ANTHROPIC_API_KEY). "
+                         "Running in heuristic-only mode.")
             return
         try:
             import anthropic as _anthropic
             self.client = _anthropic.Anthropic(api_key=key)
         except ImportError:
-            print("[LLMClient] anthropic not installed. Run: pip install anthropic")
-        except Exception as e:
-            print(f"[LLMClient] Could not initialise Anthropic client: {e}")
+            logger.error("anthropic package not installed. Run: pip install anthropic")
+        except Exception:
+            logger.exception("Could not initialise Anthropic client")
 
     def _init_openai(self, api_key: Optional[str]) -> None:
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
-            print("[LLMClient] No OpenAI API key found (OPENAI_API_KEY). "
-                  "Running in heuristic-only mode.")
+            logger.error("No OpenAI API key found (OPENAI_API_KEY). "
+                         "Running in heuristic-only mode.")
             return
         try:
             import openai as _openai
@@ -165,9 +179,9 @@ class LLMClient:
                 kwargs["base_url"] = base_url
             self.client = _openai.OpenAI(**kwargs)
         except ImportError:
-            print("[LLMClient] openai not installed. Run: pip install openai")
-        except Exception as e:
-            print(f"[LLMClient] Could not initialise OpenAI client: {e}")
+            logger.error("openai package not installed. Run: pip install openai")
+        except Exception:
+            logger.exception("Could not initialise OpenAI client")
 
     # ──────────────────────────────────────────────────────────────────────────
     # Public interface
@@ -185,18 +199,30 @@ class LLMClient:
         unavailable or the API call fails.
         """
         if self.client is None:
+            logger.warning("LLM unavailable (provider=%s), falling back to heuristic [schema=%s prompt_chars=%d]",
+                           self.provider, response_schema.__name__, len(prompt))
             return self._heuristic_extractor(prompt, response_schema)
 
+        start = time.perf_counter()
+        logger.debug("LLM call start: provider=%s model=%s schema=%s prompt_chars=%d",
+                     self.provider, self.model, response_schema.__name__, len(prompt))
         try:
             if self.provider == "gemini":
-                return self._generate_gemini(prompt, response_schema)
+                result = self._generate_gemini(prompt, response_schema)
             elif self.provider == "anthropic":
-                return self._generate_anthropic(prompt, response_schema)
+                result = self._generate_anthropic(prompt, response_schema)
             elif self.provider == "openai":
-                return self._generate_openai(prompt, response_schema)
-        except Exception as e:
-            print(f"[LLMClient] {self.provider} generation failed: {e}. "
-                  "Falling back to rule-based extractor.")
+                result = self._generate_openai(prompt, response_schema)
+            else:
+                result = None
+            if result is not None:
+                logger.info("LLM call ok: provider=%s model=%s prompt_chars=%d latency=%.2fs",
+                            self.provider, self.model, len(prompt), time.perf_counter() - start)
+                return result
+        except Exception:
+            logger.exception("LLM call failed: provider=%s model=%s prompt_chars=%d latency=%.2fs",
+                             self.provider, self.model, len(prompt), time.perf_counter() - start)
+            logger.warning("LLM unavailable, falling back to heuristic (provider=%s)", self.provider)
 
         return self._heuristic_extractor(prompt, response_schema)
 
@@ -215,7 +241,7 @@ class LLMClient:
                 "temperature": 0.1,
             },
         )
-        return response_schema.model_validate_json(response.text)
+        return self._parse_response(response.text, response_schema)
 
     def _generate_anthropic(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
         # Strip verbose field descriptions before serialising — saves ~400 tokens
@@ -241,7 +267,7 @@ class LLMClient:
         raw_text = next(
             (block.text for block in response.content if block.type == "text"), ""
         )
-        return response_schema.model_validate_json(raw_text)
+        return self._parse_response(raw_text, response_schema)
 
     def _generate_openai(self, prompt: str, response_schema: type[BaseModel]) -> BaseModel:
         # Strip verbose descriptions to reduce input tokens; OpenAI strict mode
@@ -270,7 +296,16 @@ class LLMClient:
             ],
         )
         raw_text = response.choices[0].message.content or ""
-        return response_schema.model_validate_json(raw_text)
+        return self._parse_response(raw_text, response_schema)
+
+    def _parse_response(self, raw_text: Optional[str], response_schema: type[BaseModel]) -> BaseModel:
+        try:
+            return response_schema.model_validate_json(raw_text)
+        except Exception:
+            logger.error("JSON parse/validation failed: provider=%s model=%s schema=%s response_chars=%d head=%r",
+                         self.provider, self.model, response_schema.__name__,
+                         len(raw_text or ""), (raw_text or "")[:200])
+            raise
 
     # ──────────────────────────────────────────────────────────────────────────
     # Heuristic fallback (no API key / offline)

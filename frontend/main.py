@@ -13,6 +13,7 @@ import sys
 import uuid
 import json
 import logging
+import time
 from typing import List
 
 # Ensure parent directory is in path so we can import local pipeline and backend tools if needed
@@ -25,8 +26,13 @@ from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("proxy")
+# frontend/ is deployed standalone (Dockerfile copies only this dir), so src/ is not
+# importable here: mirror the core's text format with stdlib logging.
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("incident.web.proxy")
 
 RESOURCE = os.environ.get(
     "AGENT_ENGINE_RESOURCE_NAME",
@@ -43,6 +49,20 @@ A2A_ENDPOINT = (
 _A2UI_MIME = "application/json+a2ui"
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def _log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("%s %s -> unhandled error", request.method, request.url.path)
+        raise
+    ms = (time.perf_counter() - start) * 1000
+    level = logging.WARNING if response.status_code >= 400 else logging.INFO
+    logger.log(level, "%s %s -> %d (%.0fms)", request.method, request.url.path, response.status_code, ms)
+    return response
 
 _credentials = None
 _contexts: dict[str, str] = {}
@@ -107,7 +127,13 @@ async def _call_agent_rpc(message: str, user_id: str = "web-user") -> list[dict]
 
     parts: list[dict] = []
     async with httpx.AsyncClient(headers=_auth_headers(), timeout=180) as client:
-        resp = await client.post(A2A_ENDPOINT, json=rpc_payload)
+        t0 = time.perf_counter()
+        try:
+            resp = await client.post(A2A_ENDPOINT, json=rpc_payload)
+        except httpx.HTTPError as e:
+            logger.error("Upstream call failed after %.2fs: %s: %s", time.perf_counter() - t0, type(e).__name__, e)
+            raise
+        logger.info("Upstream A2A call -> %d in %.2fs", resp.status_code, time.perf_counter() - t0)
         if resp.status_code != 200:
             logger.error(f"Upstream returned HTTP {resp.status_code}: {resp.text}")
             return [{"kind": "text", "text": f"Error from Agent Engine: HTTP {resp.status_code}"}]
@@ -115,6 +141,7 @@ async def _call_agent_rpc(message: str, user_id: str = "web-user") -> list[dict]
         resp_json = resp.json()
         if "error" in resp_json:
             err_msg = resp_json["error"].get("message", "Unknown error")
+            logger.warning("Upstream agent returned JSON-RPC error: %s", err_msg)
             return [{"kind": "text", "text": f"Agent error: {err_msg}"}]
 
         res = resp_json.get("result", {})
@@ -162,6 +189,7 @@ async def upload_excel(file: UploadFile = File(...)):
         file_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{file.filename}")
         
         content = await file.read()
+        logger.info("Upload received file=%r size=%d bytes", file.filename, len(content))
         with open(file_path, "wb") as f:
             f.write(content)
 

@@ -23,6 +23,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.backend.base_storage import StorageBackend
+from src.logging_config import get_logger
+
+logger = get_logger("storage.firestore")
 
 _PROJECTS_COLLECTION = "projects"
 _INCIDENTS_SUBCOLLECTION = "incidents"
@@ -67,7 +70,9 @@ class FirestoreStorage(StorageBackend):
 
     def __init__(self) -> None:
         from google.cloud import firestore
-        self._db = firestore.Client(project=_get_project_id())
+        project = _get_project_id()
+        self._db = firestore.Client(project=project)
+        logger.info("Firestore storage ready gcp_project=%s", project)
 
     def _incidents_col(self, project_id: str):
         return (
@@ -99,6 +104,7 @@ class FirestoreStorage(StorageBackend):
         if not inc_id:
             raise ValueError("incident_id is required")
         self._incidents_col(project_id).document(inc_id).set(doc, merge=True)
+        logger.debug("save_incident id=%s project=%s", inc_id, project_id)
         return inc_id
 
     def get_incident(
@@ -110,8 +116,8 @@ class FirestoreStorage(StorageBackend):
             ref = self._incidents_col(project_id).document(incident_id)
             doc = ref.get()
             return doc.to_dict() if doc.exists else None
-        except Exception as e:
-            print(f"[FirestoreStorage] get_incident failed: {e}")
+        except Exception:
+            logger.exception("get_incident failed")
             return None
 
     def query_incidents(
@@ -130,9 +136,11 @@ class FirestoreStorage(StorageBackend):
                 q = q.where("root_cause_domain", "==", domain)
             if failure_mechanism:
                 q = q.where("failure_mechanism", "==", failure_mechanism)
-            return [d.to_dict() for d in q.limit(limit).stream()]
-        except Exception as e:
-            print(f"[FirestoreStorage] query_incidents failed: {e}")
+            rows = [d.to_dict() for d in q.limit(limit).stream()]
+            logger.debug("query_incidents project=%s limit=%d -> %d rows", project_id, limit, len(rows))
+            return rows
+        except Exception:
+            logger.exception("query_incidents failed")
             return []
 
     # ------------------------------------------------------------------
@@ -156,8 +164,8 @@ class FirestoreStorage(StorageBackend):
         try:
             doc = self._taxonomy_col(project_id).document("current").get()
             return doc.to_dict().get("tree") if doc.exists else None
-        except Exception as e:
-            print(f"[FirestoreStorage] get_taxonomy_tree failed: {e}")
+        except Exception:
+            logger.exception("get_taxonomy_tree failed")
             return None
 
     # ------------------------------------------------------------------
@@ -184,8 +192,8 @@ class FirestoreStorage(StorageBackend):
                 data.pop(_INCIDENTS_SUBCOLLECTION, None)
                 data.pop(_TAXONOMY_SUBCOLLECTION, None)
             return data
-        except Exception as e:
-            print(f"[FirestoreStorage] get_project failed: {e}")
+        except Exception:
+            logger.exception("get_project failed")
             return None
 
     def list_projects(self) -> List[Dict[str, Any]]:
@@ -197,9 +205,10 @@ class FirestoreStorage(StorageBackend):
                 if data and "project_id" in data:
                     results.append(data)
             results.sort(key=lambda p: p.get("created_at", ""))
+            logger.debug("list_projects -> %d", len(results))
             return results
-        except Exception as e:
-            print(f"[FirestoreStorage] list_projects failed: {e}")
+        except Exception:
+            logger.exception("list_projects failed")
             return []
 
     def delete_project(self, project_id: str) -> bool:
@@ -217,6 +226,6 @@ class FirestoreStorage(StorageBackend):
                 doc.reference.delete()
             proj_ref.delete()
             return True
-        except Exception as e:
-            print(f"[FirestoreStorage] delete_project failed: {e}")
+        except Exception:
+            logger.exception("delete_project failed")
             return False

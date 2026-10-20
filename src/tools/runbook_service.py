@@ -1,6 +1,9 @@
 import os
 import json
 from typing import List, Dict, Any, Optional
+from src.logging_config import get_logger
+
+logger = get_logger("tools.runbook")
 
 RUNBOOKS_DB = [
     {
@@ -118,6 +121,9 @@ def search_runbooks(technology: str, failure_mechanism: Optional[str] = None) ->
             # failure mechanism doesn't match, so callers always get something useful.
             matches.append(rbk)
 
+    logger.info("Runbook search technology=%r failure=%r matches=%d", technology, failure_mechanism, len(matches))
+    if not matches:
+        logger.warning("No runbook matched technology=%r; returning generic triage template", technology)
     # Safety net: return a generic triage template when no runbook matches at all.
     return matches or [
         {

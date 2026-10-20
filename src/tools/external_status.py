@@ -1,6 +1,11 @@
 import urllib.request
 import json
+import time
 from typing import Dict, Any, List
+
+from src.logging_config import get_logger
+
+logger = get_logger("tools.external_status")
 
 STATUS_ENDPOINTS = {
     "github": "https://www.githubstatus.com/api/v2/summary.json"
@@ -20,9 +25,12 @@ def check_external_service_status(service_name: str = "github") -> Dict[str, Any
         headers={"User-Agent": "IncidentAnalysisAgent/1.0", "Accept": "application/json"}
     )
 
+    started = time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=5) as response:
+            logger.info("GET %s status=%s latency=%.2fs", url, response.status, time.perf_counter() - started)
             if response.status != 200:
+                logger.warning("Unexpected status from %s: HTTP %s", url, response.status)
                 return {
                     "service": service_name,
                     "status": "error",
@@ -54,6 +62,7 @@ def check_external_service_status(service_name: str = "github") -> Dict[str, Any
                         "latest_update": (inc.get("incident_updates", [{}])[0]).get("body")
                     })
 
+            logger.info("Parsed status service=%s overall=%s active_incidents=%d", page_name, overall_status, len(active_incidents))
             return {
                 "service": page_name,
                 "overall_status": overall_status,
@@ -63,6 +72,7 @@ def check_external_service_status(service_name: str = "github") -> Dict[str, Any
             }
 
     except Exception as e:
+        logger.warning("Status fetch failed url=%s after %.2fs: %s", url, time.perf_counter() - started, e, exc_info=True)
         return {
             "service": service_name,
             "status": "error",

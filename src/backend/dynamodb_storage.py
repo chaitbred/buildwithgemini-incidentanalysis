@@ -30,6 +30,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.backend.base_storage import StorageBackend
+from src.logging_config import get_logger
+
+logger = get_logger("storage.dynamodb")
 
 _INCIDENTS_TABLE = os.getenv("DYNAMODB_INCIDENTS_TABLE", "incidents")
 _TAXONOMY_TABLE = os.getenv("DYNAMODB_TAXONOMY_TABLE", "taxonomy")
@@ -81,6 +84,7 @@ class DynamoDBStorage(StorageBackend):
         self._incidents = self._dynamodb.Table(_INCIDENTS_TABLE)
         self._taxonomy = self._dynamodb.Table(_TAXONOMY_TABLE)
         self._projects = self._dynamodb.Table(_PROJECTS_TABLE)
+        logger.info("DynamoDB storage ready tables=%s/%s/%s custom_endpoint=%s", _INCIDENTS_TABLE, _TAXONOMY_TABLE, _PROJECTS_TABLE, bool(endpoint))
 
     # ------------------------------------------------------------------
     # Incident operations
@@ -97,6 +101,7 @@ class DynamoDBStorage(StorageBackend):
             raise ValueError("incident_id is required")
         doc["project_id"] = project_id
         self._incidents.put_item(Item=doc)
+        logger.debug("save_incident id=%s project=%s", inc_id, project_id)
         return inc_id
 
     def get_incident(
@@ -109,8 +114,8 @@ class DynamoDBStorage(StorageBackend):
                 Key={"project_id": project_id, "incident_id": incident_id}
             )
             return resp.get("Item")
-        except Exception as e:
-            print(f"[DynamoDBStorage] get_incident failed: {e}")
+        except Exception:
+            logger.exception("get_incident failed")
             return None
 
     def query_incidents(
@@ -145,9 +150,11 @@ class DynamoDBStorage(StorageBackend):
                 kwargs["FilterExpression"] = expr
 
             resp = self._incidents.query(**kwargs)
-            return resp.get("Items", [])
-        except Exception as e:
-            print(f"[DynamoDBStorage] query_incidents failed: {e}")
+            items = resp.get("Items", [])
+            logger.debug("query_incidents project=%s limit=%d -> %d rows", project_id, limit, len(items))
+            return items
+        except Exception:
+            logger.exception("query_incidents failed")
             return []
 
     # ------------------------------------------------------------------
@@ -178,8 +185,8 @@ class DynamoDBStorage(StorageBackend):
             if item:
                 return json.loads(item["tree"])
             return None
-        except Exception as e:
-            print(f"[DynamoDBStorage] get_taxonomy_tree failed: {e}")
+        except Exception:
+            logger.exception("get_taxonomy_tree failed")
             return None
 
     # ------------------------------------------------------------------
@@ -199,8 +206,8 @@ class DynamoDBStorage(StorageBackend):
         try:
             resp = self._projects.get_item(Key={"project_id": project_id})
             return resp.get("Item")
-        except Exception as e:
-            print(f"[DynamoDBStorage] get_project failed: {e}")
+        except Exception:
+            logger.exception("get_project failed")
             return None
 
     def list_projects(self) -> List[Dict[str, Any]]:
@@ -208,9 +215,10 @@ class DynamoDBStorage(StorageBackend):
             resp = self._projects.scan()
             items = resp.get("Items", [])
             items.sort(key=lambda p: p.get("created_at", ""))
+            logger.debug("list_projects -> %d", len(items))
             return items
-        except Exception as e:
-            print(f"[DynamoDBStorage] list_projects failed: {e}")
+        except Exception:
+            logger.exception("list_projects failed")
             return []
 
     def delete_project(self, project_id: str) -> bool:
@@ -224,6 +232,7 @@ class DynamoDBStorage(StorageBackend):
             resp = self._incidents.query(
                 KeyConditionExpression=Key("project_id").eq(project_id)
             )
+            logger.info("delete_project project=%s deleting %d incidents", project_id, len(resp.get("Items", [])))
             with self._incidents.batch_writer() as batch:
                 for item in resp.get("Items", []):
                     batch.delete_item(
@@ -232,6 +241,6 @@ class DynamoDBStorage(StorageBackend):
             self._taxonomy.delete_item(Key={"doc_id": f"{project_id}::taxonomy"})
             self._projects.delete_item(Key={"project_id": project_id})
             return True
-        except Exception as e:
-            print(f"[DynamoDBStorage] delete_project failed: {e}")
+        except Exception:
+            logger.exception("delete_project failed")
             return False
